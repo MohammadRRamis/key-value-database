@@ -1,24 +1,32 @@
 from uhashring import HashRing
 import socket
 
-
 class DistributedStoreClient:
     def __init__(self, node_info):
         self.ring = HashRing(nodes=list(node_info.keys()))
         self.node_info = node_info
 
-    def _send_request(self, node_name, key, value=None):
+    def _send_request(self, node_name, action, key, value=None):
         host, port = self.node_info[node_name]
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect((host, port))
-            s.sendall(f'{key}:{value or ""}'.encode('utf-8'))
+            request = f'{action}:{key}:{value or ""}'
+            s.sendall(request.encode('utf-8'))
             response = s.recv(1024)
         return response.decode('utf-8')
 
-    def put(self, key, value):
+    def create(self, key, value):
         node_name = self.ring.get_node(key)
-        return self._send_request(node_name, key, value)
+        return self._send_request(node_name, 'CREATE', key, value)
 
-    def get(self, key):
+    def read(self, key):
         node_name = self.ring.get_node(key)
-        return self._send_request(node_name, key)
+        return self._send_request(node_name, 'READ', key)
+
+    def update(self, key, value):
+        node_name = self.ring.get_node(key)
+        return self._send_request(node_name, 'UPDATE', key, value)
+
+    def delete(self, key):
+        node_name = self.ring.get_node(key)
+        return self._send_request(node_name, 'DELETE', key)

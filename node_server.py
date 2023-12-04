@@ -25,13 +25,35 @@ class NodeServer:
     def handle_client(self, client_socket):
         with client_socket:
             request = client_socket.recv(1024).decode('utf-8')
-            key, value = request.split(':')
-            if value:
+            parts = request.split(':')
+            action = parts[0].upper()
+            key = parts[1]
+
+            if action == 'CREATE':
+                value = parts[2]
                 self.data[key] = value
                 self.save_data()
                 response = f'SAVED {key}:{value}'
-            else:
+            elif action == 'READ':
                 response = self.data.get(key, 'NOT FOUND')
+            elif action == 'UPDATE':
+                value = parts[2]
+                if key in self.data:
+                    self.data[key] = value
+                    self.save_data()
+                    response = f'UPDATED {key}:{value}'
+                else:
+                    response = 'KEY NOT FOUND'
+            elif action == 'DELETE':
+                if key in self.data:
+                    del self.data[key]
+                    self.save_data()
+                    response = f'DELETED {key}'
+                else:
+                    response = 'KEY NOT FOUND'
+            else:
+                response = 'INVALID COMMAND'
+
             client_socket.sendall(response.encode('utf-8'))
 
     def start(self):
@@ -42,3 +64,8 @@ class NodeServer:
                 client_socket, addr = s.accept()
                 client_thread = threading.Thread(target=self.handle_client, args=(client_socket,))
                 client_thread.start()
+
+# Example usage:
+if __name__ == "__main__":
+    server = NodeServer('localhost', 12345, 'data.json')
+    server.start()
