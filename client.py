@@ -1,5 +1,5 @@
 from distributedStoreClient import DistributedStoreClient
-from hashRing import ring
+from hashRing import ring, removeNode
 import time
 
 
@@ -8,8 +8,15 @@ import time
 # and that the HashRing is utilized correctly for distributing keys across the nodes
 
 # Initialize the client with node information
-# client = DistributedStoreClient()
 hr = ring()
+
+# # Remove "node2" from the hash ring
+# print(hr.get_nodes())
+# # removeNode('node2')
+# removeNode('node1')
+# print(hr.get_nodes())
+# print(hr["1"].get("1"))
+
 
 while True:
     print("Available actions: create, read, update, delete, exit")
@@ -19,8 +26,6 @@ while True:
         break
     
     if action in ['create', 'read', 'update', 'delete']:
-        print(hr['name'].get('name'))
-
         key = input("Enter key: ")
 
         if action == 'create' or action == 'update':
