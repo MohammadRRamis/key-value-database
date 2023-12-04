@@ -1,4 +1,4 @@
-from distributed_store_client import DistributedStoreClient
+from distributedStoreClient import DistributedStoreClient
 
 # Define node information (host, port)
 node_info = {

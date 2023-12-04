@@ -1,6 +1,14 @@
 import threading
-from node_server import NodeServer
+from nodeServer import NodeServer
 
+
+
+
+"""
+initializes and starts each node server for the distributed key-value store. 
+Each node server runs on a specified host and port 
+and utilizes a specified file for data storage. 
+"""
 def start_node(host, port, data_file):
     node = NodeServer(host, port, data_file)
     node.start()
