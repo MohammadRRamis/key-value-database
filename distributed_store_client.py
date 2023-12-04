@@ -1,0 +1,24 @@
+from uhashring import HashRing
+import socket
+
+
+class DistributedStoreClient:
+    def __init__(self, node_info):
+        self.ring = HashRing(nodes=list(node_info.keys()))
+        self.node_info = node_info
+
+    def _send_request(self, node_name, key, value=None):
+        host, port = self.node_info[node_name]
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.connect((host, port))
+            s.sendall(f'{key}:{value or ""}'.encode('utf-8'))
+            response = s.recv(1024)
+        return response.decode('utf-8')
+
+    def put(self, key, value):
+        node_name = self.ring.get_node(key)
+        return self._send_request(node_name, key, value)
+
+    def get(self, key):
+        node_name = self.ring.get_node(key)
+        return self._send_request(node_name, key)
