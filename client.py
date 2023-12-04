@@ -1,13 +1,11 @@
 from distributedStoreClient import DistributedStoreClient
 
-# Define node information (host, port)
-node_info = {
-    'node1': ('localhost', 5001),
-    'node2': ('localhost', 6002),
-}
+
+# we need to ensure the client is aware of the node information 
+# and that the HashRing is utilized correctly for distributing keys across the nodes
 
 # Initialize the client with node information
-client = DistributedStoreClient(node_info)
+client = DistributedStoreClient()
 
 while True:
     print("Available actions: create, read, update, delete, exit")

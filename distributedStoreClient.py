@@ -1,13 +1,15 @@
 from uhashring import HashRing
+from hashRing import ring, nodesInfo
 import socket
 
 class DistributedStoreClient:
-    def __init__(self, node_info):
-        self.ring = HashRing(nodes=list(node_info.keys()))
-        self.node_info = node_info
-
+    def __init__(self):
+        self.ring = ring()
+        self.node_info = nodesInfo()
+        
+        
     def _send_request(self, node_name, action, key, value=None):
-        host, port = self.node_info[node_name]
+        host, port = self.node_info[node_name]['host'], self.node_info[node_name]['port'], 
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect((host, port))
             request = f'{action}:{key}:{value or ""}'
