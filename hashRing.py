@@ -1,25 +1,23 @@
 from uhashring import HashRing
+import redis
 
 
 nodes = {
     'node1': {
-            'host': 'localhost',
-            'data_file': 'node1_data.json',
-            'port': 6001,
-
-        },
+        'hostname': 'localhost',
+        'instance': redis.StrictRedis(host='localhost', port=6379),
+        'vnodes': 40,
+        'port': 6379,
+    },
     'node2': {
-            'host': 'localhost',
-            'data_file': 'node2_data.json',
-            'port': 6002,
+        'hostname': 'localhost',
+        'instance': redis.StrictRedis(host='localhost', port=6378),
+        'vnodes': 40,
+        'port': 6378,
+    },
 
-        },
-    'node3': {
-            'host': 'localhost',
-            'data_file': 'node2_data.json',
-            'port': 6003,
-        }
-    }
+}
+
 hr = HashRing(nodes)
 
 def ring():
@@ -27,3 +25,4 @@ def ring():
 
 def nodesInfo():
     return nodes
+

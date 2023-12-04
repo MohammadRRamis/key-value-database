@@ -2,6 +2,7 @@ from uhashring import HashRing
 from hashRing import ring, nodesInfo
 import socket
 
+
 class DistributedStoreClient:
     def __init__(self):
         self.ring = ring()
