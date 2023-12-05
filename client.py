@@ -35,9 +35,9 @@ while True:
                 
         #     elif action == 'update':
         #         client.update(key, value)
-        # elif action == 'read':
-        #     result = client.read(key)
-        #     print(result)
+        elif action == 'read':
+            result = hr[key].get(key)
+            print(result)
         # elif action == 'delete':
         #     client.delete(key)
     else:
