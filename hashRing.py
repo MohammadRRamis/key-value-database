@@ -3,7 +3,7 @@ import threading
 import redis
 import time
 
-
+global nodes
 nodes = {
     'node1': {
         'hostname': 'localhost',
@@ -88,21 +88,6 @@ def addNode(nodename):
     print(f"{nodename} added and data redistributed successfully.")
 
 
-def addNodeRedistributeData(source_node, target_node, hr):
-    """
-    Move data from the source node to the target node based on the updated hash ring.
-    """
-    source_instance = nodes[source_node]['instance']
-    keys = source_instance.keys()
-
-    for key in keys:
-        # Check if the key should be moved to the target node
-        correct_node = hr.get_node(key)
-        if correct_node == target_node:
-            value = source_instance.get(key)
-            nodes[target_node].get('instance').set(key,value)
-            # nodes[target_node]['instance'].set(key, value)
-            source_instance.delete(key)
 
 
 

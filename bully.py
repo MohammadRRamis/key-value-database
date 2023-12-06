@@ -2,6 +2,8 @@ import threading
 import time
 import redis
 
+from nodesManager import getNodes, updateNodeStatus
+
 class Process(threading.Thread):
     def __init__(self, pid, all_processes):
         super(Process, self).__init__()
@@ -42,12 +44,24 @@ class Process(threading.Thread):
     def send_answer_message(self, initiator):
         print(f"Process {self.pid} answers to {initiator.pid}")
 
+    # def become_coordinator(self):
+    #     print(f"Process {self.pid} becomes the coordinator")
+    #     self.coordinator = self
+    #     for process in self.all_processes:
+    #         if process.pid != self.pid:
+    #             process.receive_coordinator_message(self)
+
     def become_coordinator(self):
-        print(f"Process {self.pid} becomes the coordinator")
-        self.coordinator = self
-        for process in self.all_processes:
-            if process.pid != self.pid:
-                process.receive_coordinator_message(self)
+        with self.mutex:
+            print(f"Process {self.pid} becomes the coordinator")
+            self.coordinator = self
+            manage_redis_nodes(self.pid)  # Function to manage Redis nodes
+
+    def manage_redis_nodes(coordinator_pid):
+        # Logic to manage Redis nodes based on the coordinator
+        # This can involve adding or removing nodes from the HashRing, 
+        # redistributing keys, etc., based on the coordinator's decisions.
+        pass
 
     def receive_coordinator_message(self, new_coordinator):
         with self.mutex:
@@ -86,7 +100,7 @@ nodes = {
         'vnodes': 40,
         'port': 6379,
         'status': 'active',
-        'replica': redis.StrictRedis(host='localhost', port=6370), 
+        # 'replica': redis.StrictRedis(host='localhost', port=6370), 
     },
     'node2': {
         'id': 2,
@@ -95,7 +109,7 @@ nodes = {
         'vnodes': 40,
         'port': 6378,
         'status': 'active',
-        'replica': redis.StrictRedis(host='localhost', port=6371),
+        # 'replica': redis.StrictRedis(host='localhost', port=6371),
     },
     'node3': {
         'id': 3,
@@ -104,7 +118,7 @@ nodes = {
         'vnodes': 40,
         'port': 6377,
         'status': 'active',
-        'replica': redis.StrictRedis(host='localhost', port=6372),
+        # 'replica': redis.StrictRedis(host='localhost', port=6372),
     },
     'node5': {
         'id': 5,
@@ -113,7 +127,6 @@ nodes = {
         'vnodes': 40,
         'port': 6374,
         'status': 'active',
-        'replica': redis.StrictRedis(host='localhost', port=6374),
     },
     'node4': {
         'id': 4,
@@ -122,13 +135,17 @@ nodes = {
         'vnodes': 40,
         'port': 6374,
         'status': 'active',
-        'replica': redis.StrictRedis(host='localhost', port=6374),
+        # 'replica': redis.StrictRedis(host='localhost', port=6374),
     },
 }
 
 # Create a list of processes with the IDs derived from the Redis port numbers
 processes = [Process(node_info['id'], nodes) for node_info in nodes.values()]
 
+
+# Start the periodic health check thread
+health_check_thread = threading.Thread(target=periodic_health_check, args=(30,))
+health_check_thread.start()
 
 # Each process knows about all other processes
 for process in processes:
@@ -149,7 +166,6 @@ processes[0].start_election()  # Start an election from the lowest ID process
 time.sleep(5)
 
 # Check and print who is the coordinator after the election
-
 coordinators = [p for p in processes if p.coordinator is p]
 if coordinators:
     print(f"The elected coordinator is Process {coordinators[0].pid}")
