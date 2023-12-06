@@ -16,6 +16,11 @@ hr = ring()
 # print(hr.get_nodes())
 # print(hr["1"].get("1"))
 
+"""
+Issue:
+    In case of an update or change in the ring, the hr needs to be updated for the client 
+
+"""
 
 while True:
     print("Available actions: create, read, update, delete, exit")
@@ -28,16 +33,20 @@ while True:
         key = input("Enter key: ")
 
         if action == 'create' or action == 'update':
+            hr = ring()
             value = input("Enter value: ")
             if action == 'create':
                 hr[key].set(key,value)
+                print(hr[key])
   
                 
         #     elif action == 'update':
         #         client.update(key, value)
         elif action == 'read':
+            hr = ring()
             result = hr[key].get(key)
             print(result)
+            print(hr[key])
         # elif action == 'delete':
         #     client.delete(key)
     else:

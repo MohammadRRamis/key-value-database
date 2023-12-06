@@ -7,19 +7,23 @@ import time
 nodes = {
     'node1': {
         'hostname': 'localhost',
-        'instance': redis.StrictRedis(host='localhost', port=6379),
+        'instance': redis.StrictRedis(host='localhost', port=6379), #replica on port 6370
         'vnodes': 40,
         'port': 6379,
         'status': 'active',
+        'replica': redis.StrictRedis(host='localhost', port=6370),
+        
     },
     'node2': {
         'hostname': 'localhost',
-        'instance': redis.StrictRedis(host='localhost', port=6378),
+        'instance': redis.StrictRedis(host='localhost', port=6378), 
         'vnodes': 40,
         'port': 6378,
         'status': 'active',
+        # 'replica': redis.StrictRedis(host='localhost', port=6371),
     },
 }
+
 
 hr = HashRing(nodes)
 
@@ -28,6 +32,7 @@ def ring():
 
 def nodesInfo():
     return nodes
+
 
 """
 In case of a failure, the keys-values in the failed nodes needs to be 
@@ -39,53 +44,43 @@ def removeNode(nodename):
     del temp_nodes[nodename]
     temp_hr = HashRing(temp_nodes)
 
-    instance = nodes[nodename].get('instance')
-    keys = instance.keys()
-    for key in keys:
-        value = instance.get(key)
-        new_node_name = temp_hr.get_node(key)
-        if new_node_name != nodename:
-            nodes[new_node_name].get('instance').set(key,value)
+    try:
+        replica = nodes[nodename].get('replica')
+        keys = replica.keys()
+        for key in keys:
+            value = replica.get(key)
+            new_node_name = temp_hr.get_node(key)
+            if new_node_name != nodename:
+                nodes[new_node_name].get('instance').set(key,value)
+    except AttributeError:
+        print("their are not keys in this node")
 
     nodes[nodename]['status'] = 'inactive'
     hr.remove_node(nodename)
 
     print(f"Node {nodename} removed successfully.")
 
-
 def addNode(nodename):
     if nodename in nodes and nodes[nodename]['status'] == "inactive":
         nodes[nodename]['status'] = "active"
         hr.add_node(nodename)
-    # else:
-    #     # Create and add the new node
-    #     newNode = {
-    #         'hostname': hostname,
-    #         'instance': redis.StrictRedis(host=hostname, port=port),
-    #         'vnodes': 40,  # Assuming default vnodes
-    #         'port': port,
-    #         'status': 'active',
-    #     }
-    #     nodes[nodename] = newNode
-    #     hr.add_node(nodename)
 
-    # Create a temporary HashRing including the new node for redistribution
-    temp_hr = HashRing(nodes)
+    # temp_nodes = nodes.copy()
+    # add temp_nodes[nodename]
+    # temp_hr = HashRing(temp_nodes)
 
     # Identify the node which might have keys to be redistributed to the new node
     # For simplicity, we're just checking the next node in the ring
     # In a more complex setup, you might need a more sophisticated method to identify this node
     # Determine the next node in the ring
-    next_node = getNodeAfter(temp_hr, nodename)
+    next_node = getNodeAfter(hr, nodename)
     if next_node:
-        addNodeRedistributeData(next_node, nodename, temp_hr)
+        addNodeRedistributeData(next_node, nodename, hr)
+
+    print(f"{nodename} added and data redistributed successfully.")
 
 
-    print(f"Node {nodename} added and data redistributed successfully.")
-
-
-
-def addNodeRedistributeData(source_node, target_node, temp_hr):
+def addNodeRedistributeData(source_node, target_node, hr):
     """
     Move data from the source node to the target node based on the updated hash ring.
     """
@@ -94,11 +89,14 @@ def addNodeRedistributeData(source_node, target_node, temp_hr):
 
     for key in keys:
         # Check if the key should be moved to the target node
-        correct_node = temp_hr.get_node(key)
+        correct_node = hr.get_node(key)
         if correct_node == target_node:
             value = source_instance.get(key)
-            nodes[target_node]['instance'].set(key, value)
+            nodes[target_node].get('instance').set(key,value)
+            # nodes[target_node]['instance'].set(key, value)
             source_instance.delete(key)
+
+
 
 def getNodeAfter(hr, nodename): 
     """
@@ -106,8 +104,13 @@ def getNodeAfter(hr, nodename):
     """
     sorted_nodes = sorted(hr.get_nodes())
     current_index = sorted_nodes.index(nodename)
+
+    # the mod (%) is used to "wrap around" if the index goes beyond the length of the list. 
     next_index = (current_index + 1) % len(sorted_nodes)
     return sorted_nodes[next_index]
+
+
+
 
 # Regular Health Checks: Periodically ping each node to check its status.
 # Handling Failures: If a node fails to respond, consider it as unavailable 
@@ -126,6 +129,7 @@ def check_node_health(node_instance, nodename):
         return False
 
 
+
 def periodic_health_check(interval=5):
     while True:
         for nodename in list(nodes.keys()):
@@ -135,6 +139,23 @@ def periodic_health_check(interval=5):
 
         time.sleep(interval)
 
+
+def readReplica(nodename):
+    instance = nodes[nodename].get('instance')
+        # In case of failure, switch to a replica
+    try:
+        keys = instance.keys()
+    except ConnectionError:
+        # Handle the failure - switch to replica
+        replica = nodes[nodename].get('replica')
+        if replica:
+            print(f"Primary node {nodename} is down. Switching to replica.")
+            instance = replica
+            keys = instance.keys()
+            return keys, instance
+        else:
+            print(f"No replica available for node {nodename}.")
+            return
 
 # Start the periodic health check in a separate thread
 health_check_thread = threading.Thread(target=periodic_health_check, args=(30,))
