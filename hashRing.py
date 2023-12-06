@@ -3,31 +3,26 @@ import threading
 import redis
 import time
 
-global nodes
+
 nodes = {
     'node1': {
+        'id': 1,
         'hostname': 'localhost',
         'instance': redis.StrictRedis(host='localhost', port=6379), #replica on port 6370
         'vnodes': 40,
         'port': 6379,
-        'status': 'active',
-        'replica': redis.StrictRedis(host='localhost', port=6370), 
+        'isAlive': True,
+        'replica': redis.StrictRedis(host='localhost', port=6370),
+        
     },
     'node2': {
+        'id': 2,
         'hostname': 'localhost',
         'instance': redis.StrictRedis(host='localhost', port=6378), 
         'vnodes': 40,
         'port': 6378,
-        'status': 'active',
-        'replica': redis.StrictRedis(host='localhost', port=6371),
-    },
-    'node3': {
-        'hostname': 'localhost',
-        'instance': redis.StrictRedis(host='localhost', port=6378), 
-        'vnodes': 40,
-        'port': 6378,
-        'status': 'active',
-        'replica': redis.StrictRedis(host='localhost', port=6372),
+        'isAlive': True,
+        # 'replica': redis.StrictRedis(host='localhost', port=6371),
     },
 }
 
@@ -62,15 +57,14 @@ def removeNode(nodename):
     except AttributeError:
         print("their are not keys in this node")
 
-    nodes[nodename]['status'] = 'inactive'
+    nodes[nodename]['isAlive'] = False
     hr.remove_node(nodename)
 
     print(f"Node {nodename} removed successfully.")
 
-
 def addNode(nodename):
-    if nodename in nodes and nodes[nodename]['status'] == "inactive":
-        nodes[nodename]['status'] = "active"
+    if nodename in nodes and nodes[nodename]["isAlive"] == False:
+        nodes[nodename]["isAlive"] = True
         hr.add_node(nodename)
 
     # temp_nodes = nodes.copy()
@@ -88,6 +82,21 @@ def addNode(nodename):
     print(f"{nodename} added and data redistributed successfully.")
 
 
+def addNodeRedistributeData(source_node, target_node, hr):
+    """
+    Move data from the source node to the target node based on the updated hash ring.
+    """
+    source_instance = nodes[source_node]['instance']
+    keys = source_instance.keys()
+
+    for key in keys:
+        # Check if the key should be moved to the target node
+        correct_node = hr.get_node(key)
+        if correct_node == target_node:
+            value = source_instance.get(key)
+            nodes[target_node].get('instance').set(key,value)
+            # nodes[target_node]['instance'].set(key, value)
+            source_instance.delete(key)
 
 
 
@@ -103,18 +112,21 @@ def getNodeAfter(hr, nodename):
     return sorted_nodes[next_index]
 
 
+def getNodes():
+    return nodes
+
 # Regular Health Checks: Periodically ping each node to check its status.
 # Handling Failures: If a node fails to respond, consider it as unavailable 
 # and proceed with failure handling, remove it from the HashRing and redistributing its data.
 def check_node_health(node_instance, nodename):
     try:
         if node_instance.ping():
-            if nodes[nodename]['status'] == 'inactive':
+            if nodes[nodename]['isAlive'] == False:
                 print(f"{nodename} is back online. Re-adding to HashRing.")
                 addNode(nodename)
             return True
     except redis.exceptions.ConnectionError:
-        if nodes[nodename]['status'] == 'active':
+        if nodes[nodename]['isAlive'] == True:
             print(f"{nodename} is down. Marking as inactive.")
             removeNode(nodename)
         return False
@@ -131,22 +143,6 @@ def periodic_health_check(interval=5):
         time.sleep(interval)
 
 
-def readReplica(nodename):
-    instance = nodes[nodename].get('instance')
-        # In case of failure, switch to a replica
-    try:
-        keys = instance.keys()
-    except ConnectionError:
-        # Handle the failure - switch to replica
-        replica = nodes[nodename].get('replica')
-        if replica:
-            print(f"Primary node {nodename} is down. Switching to replica.")
-            instance = replica
-            keys = instance.keys()
-            return keys, instance
-        else:
-            print(f"No replica available for node {nodename}.")
-            return
 
 # Start the periodic health check in a separate thread
 health_check_thread = threading.Thread(target=periodic_health_check, args=(30,))

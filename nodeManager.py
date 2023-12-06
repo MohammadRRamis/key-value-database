@@ -32,3 +32,6 @@ def getNodes():
 
 def update_node_status(node_name, status):
     nodes[node_name]['status'] = status
+
+
+
