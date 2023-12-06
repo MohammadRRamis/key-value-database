@@ -11,8 +11,7 @@ nodes = {
         'vnodes': 40,
         'port': 6379,
         'status': 'active',
-        'replica': redis.StrictRedis(host='localhost', port=6370),
-        
+        'replica': redis.StrictRedis(host='localhost', port=6370), 
     },
     'node2': {
         'hostname': 'localhost',
@@ -20,7 +19,15 @@ nodes = {
         'vnodes': 40,
         'port': 6378,
         'status': 'active',
-        # 'replica': redis.StrictRedis(host='localhost', port=6371),
+        'replica': redis.StrictRedis(host='localhost', port=6371),
+    },
+    'node3': {
+        'hostname': 'localhost',
+        'instance': redis.StrictRedis(host='localhost', port=6378), 
+        'vnodes': 40,
+        'port': 6378,
+        'status': 'active',
+        'replica': redis.StrictRedis(host='localhost', port=6372),
     },
 }
 
@@ -59,6 +66,7 @@ def removeNode(nodename):
     hr.remove_node(nodename)
 
     print(f"Node {nodename} removed successfully.")
+
 
 def addNode(nodename):
     if nodename in nodes and nodes[nodename]['status'] == "inactive":
@@ -108,8 +116,6 @@ def getNodeAfter(hr, nodename):
     # the mod (%) is used to "wrap around" if the index goes beyond the length of the list. 
     next_index = (current_index + 1) % len(sorted_nodes)
     return sorted_nodes[next_index]
-
-
 
 
 # Regular Health Checks: Periodically ping each node to check its status.

@@ -16,11 +16,6 @@ hr = ring()
 # print(hr.get_nodes())
 # print(hr["1"].get("1"))
 
-"""
-Issue:
-    In case of an update or change in the ring, the hr needs to be updated for the client 
-
-"""
 
 while True:
     print("Available actions: create, read, update, delete, exit")
