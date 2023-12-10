@@ -22,7 +22,7 @@ nodes = {
         'vnodes': 40,
         'port': 6378,
         'isAlive': True,
-        # 'replica': redis.StrictRedis(host='localhost', port=6371),
+        'replica': redis.StrictRedis(host='localhost', port=6371),
     },
 }
 
@@ -133,7 +133,7 @@ def check_node_health(node_instance, nodename):
 
 
 
-def periodic_health_check(interval=5):
+def periodic_health_check(interval=1):
     while True:
         for nodename in list(nodes.keys()):
             node_info = nodes.get(nodename)
