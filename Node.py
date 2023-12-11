@@ -293,7 +293,7 @@ class Node(threading.Thread):
                     self.handle_coordinator_request(node_id)
                 elif message == 'COORDINATOR_INFO':
                     coordinator_id = int(parts[2])
-                    self.handle_coordinator_info(node_id, coordinator_id)
+                    self.handle_coordinator_info(node_id, parts)
                 elif message == 'NODE_LIST_UPDATE':
                     self.update_node_list(parts[1])
                 elif message == 'RECOVERY':
@@ -315,12 +315,14 @@ class Node(threading.Thread):
             self.send_message(self.nodes[f'node{from_node_id}']['hostname'], self.nodes[f'node{from_node_id}']['port'], f'COORDINATOR_INFO {self.coordinator}')
 
 
-    def handle_coordinator_info(self, from_node_id, coordinator_id):
-        # Update the coordinator information based on the received message
+    def handle_coordinator_info(self, from_node_id, message_parts):
+        # Assuming the coordinator ID is the second part of the message
+        coordinator_id = int(message_parts[1])
         with self.mutex:
             if self.coordinator is None or self.coordinator != coordinator_id:
                 self.coordinator = coordinator_id
                 print(f"Updated coordinator to {coordinator_id} based on info from Node {from_node_id}")
+
                 
     def handle_new_coordinator(self, coordinator_id):
         with self.mutex:
@@ -341,8 +343,8 @@ class Node(threading.Thread):
 
 
 node = Node(1, 'localhost', 5010, nodes,  redis.StrictRedis(host='localhost', port=6379))
-# node = Node(2, 'localhost', 5020, nodes,  redis.StrictRedis(host='localhost', port=6379))
-# node = Node(3, 'localhost', 5030, nodes,  redis.StrictRedis(host='localhost', port=6379))
+node = Node(2, 'localhost', 5020, nodes,  redis.StrictRedis(host='localhost', port=6379))
+node = Node(3, 'localhost', 5030, nodes,  redis.StrictRedis(host='localhost', port=6379))
 node.start()
 
 # node.start_election()
