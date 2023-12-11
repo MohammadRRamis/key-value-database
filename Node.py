@@ -11,7 +11,6 @@ nodes = {
         'id': 1,
         'hostname': 'localhost',
         'port': 5010,
-        'instance': redis.StrictRedis(host='localhost', port=6379), #replica on port 6370
         'isAlive': True,
         
     },
@@ -19,14 +18,12 @@ nodes = {
         'id': 2,
         'hostname': 'localhost',
         'port': 5020,
-        'instance': redis.StrictRedis(host='localhost', port=6378), 
         'isAlive': False,
     },
     'node3': {
         'id': 3,
         'hostname': 'localhost',
         'port': 5030,
-        'instance': redis.StrictRedis(host='localhost', port=6377), 
         'isAlive': False,
     },
 }
@@ -41,12 +38,11 @@ class Node(threading.Thread):
     heartbeat_interval = 5  # Interval for sending heartbeats (in seconds)
     failure_timeout = 10    # Time after which a node is considered failed (in seconds)
 
-    def __init__(self, id, hostname, port, nodes, redisInstance):
+    def __init__(self, id, hostname, port, nodes):
         super(Node, self).__init__()
         self.pid = id #the id of the node
         self.hostname = hostname #ip address of the server
         self.port = port #port of the server
-        self.redisInstance = redisInstance #the database associated with the node
         self.nodes = nodes #a list of the other nodes in the distributed system
         self.nodename = "node" + str(id)
         self.coordinator = None #their is only one coordiantor
@@ -87,21 +83,6 @@ class Node(threading.Thread):
         if self.coordinator is not None and self.coordinator != self.pid:
             coordinator_info = self.nodes[f'node{self.coordinator}']
             self.send_message(coordinator_info['hostname'], coordinator_info['port'], f'RECOVERY {self.pid}')
-
-    # def monitor_heartbeats(self):
-    #     current_time = time.time()
-    #     with self.heartbeat_lock:
-    #         for node_id, last_time in self.heartbeats.items():
-    #             if current_time - last_time > self.failure_timeout:
-    #                 if node_id == self.coordinator:
-    #                     self.nodes[f'node{node_id}']['isAlive'] = False
-    #                     self.start_election()
-    #                 # else:
-    #                 self.nodes[f'node{node_id}']['isAlive'] = False
-
-    #         # Start an election if there is no coordinator
-    #         if self.coordinator is None and not self.election_in_progress:
-    #             self.start_election()
 
     def monitor_heartbeats(self):
         current_time = time.time()
@@ -170,17 +151,6 @@ class Node(threading.Thread):
                 self.send_message_to_node(node_name, 'COORDINATOR')
                 
 
-    def receive_coordinator_message(self, new_coordinator_id):
-        with self.mutex:
-            if self.isAlive:
-                print(f"Node {self.pid} acknowledges new coordinator {new_coordinator_id}")
-                self.coordinator = new_coordinator_id
-
-
-    """
-    XxxXXXXXXXXXXXXXXXXXXXXXXXXX
-    
-    """
     def start_election(self):
         if not self.election_in_progress:
             self.election_in_progress = True
@@ -253,15 +223,6 @@ class Node(threading.Thread):
             print(f"Error while sending message to {hostname}:{port}: {e}")
 
 
-
-    def receive_message(self, message, from_node_id):
-        if message == 'ELECTION':
-            self.receive_election_message(from_node_id)
-        elif message == 'COORDINATOR':
-            self.receive_coordinator_message(from_node_id)
-        elif message == 'STATUS_RESPONSE':
-            self.response_received[from_node_id] = True
-
     def handle_client(self, conn):
         with conn:
             while True:
@@ -298,9 +259,13 @@ class Node(threading.Thread):
                     self.update_node_list(parts[1])
                 elif message == 'RECOVERY':
                     self.handle_recovery(node_id)
+             # ... other message handling as needed ...
 
-                # ... other message handling as needed ...
-
+    def receive_coordinator_message(self, new_coordinator_id):
+        with self.mutex:
+            if self.isAlive:
+                print(f"Node {self.pid} acknowledges new coordinator {new_coordinator_id}")
+                self.coordinator = new_coordinator_id
     def handle_recovery(self, node_id):
         # Update the status of the recovered node
         with self.heartbeat_lock:
@@ -342,11 +307,10 @@ class Node(threading.Thread):
 
 
 
-node = Node(1, 'localhost', 5010, nodes,  redis.StrictRedis(host='localhost', port=6379))
-node = Node(2, 'localhost', 5020, nodes,  redis.StrictRedis(host='localhost', port=6379))
-node = Node(3, 'localhost', 5030, nodes,  redis.StrictRedis(host='localhost', port=6379))
-node.start()
+node = Node(1, 'localhost', 5010, nodes)
+# node = Node(2, 'localhost', 5020, nodes)
+# node = Node(3, 'localhost', 5030, nodes)
 
-# node.start_election()
+node.start()
 node.run_server()
 
