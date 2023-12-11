@@ -4,7 +4,7 @@ import socket
 import threading
 import json
 import pickle
-from uhashring import HashRing
+
 
 
 nodes = {
@@ -29,8 +29,7 @@ nodes = {
     },
 }
 
-
-from hashRing import getNodes
+from HashRing import hashRing
 
 class Node(threading.Thread):
 
@@ -104,6 +103,13 @@ class Node(threading.Thread):
                         print(f"Coordinator (Node {self.pid}) detected that Node {node_id} has failed.")
                         self.broadcast_updated_node_list(node_id, False)
 
+                        time.sleep(0.5)
+
+                        # the coordinator will remove any node that failed
+                        # including the prev. coordinator
+                        # hashRing.removeNode("node"+node_id)
+
+
             # If this node thinks there's no coordinator and an election is not in progress, start an election
             if self.coordinator is None and not self.election_in_progress:
                 self.start_election()
@@ -122,6 +128,11 @@ class Node(threading.Thread):
 
     def become_coordinator(self):
         print(f"Node {self.pid} becomes the coordinator")
+        
+        #when the old coordinator fails, the new coordinator will have access to the hash-ring 
+        self.start_hash_ring()
+        print(self.hr)
+
         self.coordinator = self.pid
         for node_name, node_info in self.nodes.items():
             if node_info['id'] != self.pid:
@@ -276,7 +287,20 @@ class Node(threading.Thread):
                if target_node_info['id'] != self.pid:
                 self.send_message(target_node_info['hostname'], target_node_info['port'], message)
 
-        
+
+    def start_hash_ring(self):
+        # coordinator will start the hashring, with the updated list of nodes
+        # filter the nodes dict to create hash a ring with alive nodes only
+        alive_nodes = {node_id: node_info for node_id, node_info in self.nodes.items() if node_info['isAlive']}
+        self.hr = hashRing(alive_nodes)
+
+
+
+    def forward_request_to_coordiantor():
+        pass 
+
+    def client_request():
+        pass 
 
 node = Node(1, 'localhost', 5010, nodes)
 node = Node(2, 'localhost', 5020, nodes)
