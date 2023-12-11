@@ -18,13 +18,13 @@ nodes = {
         'id': 2,
         'hostname': 'localhost',
         'port': 5020,
-        'isAlive': False,
+        'isAlive': True,
     },
     'node3': {
         'id': 3,
         'hostname': 'localhost',
         'port': 5030,
-        'isAlive': False,
+        'isAlive': True,
     },
 }
 
@@ -61,6 +61,7 @@ class Node(threading.Thread):
 
         #when a new node joins the system, it will ask about the coordinator information
         self.request_coordinator_info()
+        time.sleep(2)
         self.notify_recovery()
         while True:
             self.send_heartbeat() #to enform other nodes that 'i am alive'
@@ -78,11 +79,13 @@ class Node(threading.Thread):
             if node_info['id'] != self.pid:
                 self.send_message(node_info['hostname'], node_info['port'], 'HEARTBEAT')
 
+
     def notify_recovery(self):
         # Send a message to the coordinator indicating that this node has recovered
         if self.coordinator is not None and self.coordinator != self.pid:
             coordinator_info = self.nodes[f'node{self.coordinator}']
             self.send_message(coordinator_info['hostname'], coordinator_info['port'], f'RECOVERY {self.pid}')
+
 
     def monitor_heartbeats(self):
         current_time = time.time()
@@ -104,21 +107,6 @@ class Node(threading.Thread):
                 self.start_election()
 
 
-    def detect_coordinator_failure(self):
-        current_time = time.time()
-        with self.heartbeat_lock:
-            if self.coordinator is None or self.coordinator == self.pid:
-                return False
-
-            last_heartbeat = self.heartbeats.get(self.coordinator, 0)
-            if current_time - last_heartbeat > self.failure_timeout:
-                print(f"Node {self.pid} detected that coordinator {self.coordinator} has failed.")
-                with self.mutex:
-                    self.coordinator = None
-                return True
-        return False
-
-
 
     def send_message_to_node(self, node_name, message):
         node_info = self.nodes[node_name]
@@ -130,17 +118,6 @@ class Node(threading.Thread):
             # print(f"Unable to connect to node {node_name} at {node_info['hostname']}:{node_info['port']}")
             pass
 
-
-    def receive_election_message(self, initiator_id):
-        print(f"Node {self.pid} received an election message from Node {initiator_id}.")
-        if self.isAlive:
-            self.send_message_to_node(initiator_id, 'ANSWER')
-            if not self.election_in_progress and (self.coordinator is None or self.coordinator < self.pid):
-                self.start_election()
-
-
-    def send_answer_message(self, initiator):
-        print(f"Process {self.pid} answers to {initiator.pid}")
 
 
     def become_coordinator(self):
@@ -171,36 +148,7 @@ class Node(threading.Thread):
                 self.become_coordinator()
 
             self.election_in_progress = False
-
-
-    def check_higher_pid_nodes(self):
-        self.response_received = {}
-        for node_name, node_info in self.nodes.items():
-            if node_info['id'] > self.pid:
-                self.send_message_to_node(node_name, 'STATUS_REQUEST')
-                self.response_received[node_info['id']] = False
-
-        # Wait for responses (adjust the timeout as needed)
-        time.sleep(2)
-
-        return any(self.response_received.values())
-
     
-    def detect_node_failure(self):
-        # Check the status of other nodes in the nodes dictionary to detect failures
-        for node_name, node_info in self.nodes.items():
-            if node_name != self.nodename and node_info["isAlive"] != True:
-                print(f"Process {self.pid} detected failure or inactivity of {node_name}.")
-                return True
-        return False
-    
-
-    def restart_election(self):
-        # If an election is not already in progress, start a new one
-        if not self.election_in_progress:
-            self.election_in_progress = True
-            self.start_election()
-            self.election_in_progress = False
 
     def run_server(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
@@ -266,6 +214,7 @@ class Node(threading.Thread):
             if self.isAlive:
                 print(f"Node {self.pid} acknowledges new coordinator {new_coordinator_id}")
                 self.coordinator = new_coordinator_id
+
     def handle_recovery(self, node_id):
         # Update the status of the recovered node
         with self.heartbeat_lock:
@@ -307,8 +256,8 @@ class Node(threading.Thread):
 
 
 
-node = Node(1, 'localhost', 5010, nodes)
-# node = Node(2, 'localhost', 5020, nodes)
+# node = Node(1, 'localhost', 5010, nodes)
+node = Node(2, 'localhost', 5020, nodes)
 # node = Node(3, 'localhost', 5030, nodes)
 
 node.start()
