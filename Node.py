@@ -6,7 +6,7 @@ import redis
 from uhashring import HashRing
 
 
-testNodes = {
+nodes = {
     'node1': {
         'id': 1,
         'hostname': 'localhost',
@@ -62,14 +62,17 @@ class Node(threading.Thread):
         
         
     def run(self):
-        # self.run_server()
+        self.request_coordinator_info()
         while True:
             self.send_heartbeat() #to enform other nodes that 'i am alive'
-            self.monitor_heartbeats() #check if some other node failed
-            if self.detect_coordinator_failure(): #if the coordiator failed, start new election 
-                print(f"Process {self.pid} detected coordinator failure, starting election.")
-                self.start_election()
+            self.monitor_heartbeats() #check if some other node failed 
             time.sleep(1)
+
+    def request_coordinator_info(self):
+        message = f'COORDINATOR_REQUEST {self.pid}'
+        for node_name, node_info in self.nodes.items():
+            if node_info['id'] != self.pid:
+                self.send_message(node_info['hostname'], node_info['port'], message)
 
     def send_heartbeat(self):
         for node_name, node_info in self.nodes.items():
@@ -87,6 +90,10 @@ class Node(threading.Thread):
                         self.start_election()
                     # else:
                     self.nodes[f'node{node_id}']['isAlive'] = False
+
+            # Start an election if there is no coordinator
+            if self.coordinator is None and not self.election_in_progress:
+                self.start_election()
 
 
     def detect_coordinator_failure(self):
@@ -160,7 +167,10 @@ class Node(threading.Thread):
             time.sleep(2)
 
             # Check if any higher ID nodes have responded
-            if all(not node['isAlive'] for node in higher_nodes):
+            with self.mutex:
+                alive_higher_nodes = [node for node in higher_nodes if self.heartbeats.get(node['id'], 0) > time.time() - self.failure_timeout]
+
+            if not alive_higher_nodes:
                 self.become_coordinator()
 
             self.election_in_progress = False
@@ -203,6 +213,18 @@ class Node(threading.Thread):
                 conn, addr = server_socket.accept()
                 threading.Thread(target=self.handle_client, args=(conn,)).start()
 
+    def send_message(self, hostname, port, message):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.connect((hostname, port))
+                sock.sendall(f"{message} {self.pid}".encode())
+                # print(f"Sent {message} to {hostname}:{port}")
+        except ConnectionRefusedError:
+            # print(f"Unable to connect to node at {hostname}:{port}")
+            pass
+        except Exception as e:
+            print(f"Error while sending message to {hostname}:{port}: {e}")
+
 
 
     def receive_message(self, message, from_node_id):
@@ -219,8 +241,15 @@ class Node(threading.Thread):
                 data = conn.recv(1024)
                 if not data:
                     break
-                message, node_id = data.decode().split()
-                node_id = int(node_id)
+     
+                # message, node_id = data.decode().split()
+                # node_id = int(node_id)
+
+                # Split the message into parts
+                parts = data.decode().split()
+                message = parts[0]
+                node_id = int(parts[1])
+
                 print(f"Received {message} from Node {node_id}")
 
                 if message == 'HEARTBEAT':
@@ -231,9 +260,27 @@ class Node(threading.Thread):
                     self.receive_coordinator_message(node_id)
                 elif message == 'NEW_COORDINATOR':
                     self.handle_new_coordinator(node_id)
+                elif message == 'COORDINATOR_REQUEST':
+                    self.handle_coordinator_request(node_id)
+                elif message == 'COORDINATOR_INFO':
+                    coordinator_id = int(parts[2])
+                    self.handle_coordinator_info(node_id, coordinator_id)
+
                 # ... other message handling as needed ...
 
+    def handle_coordinator_request(self, from_node_id):
+        # Respond with coordinator information if this node is aware of the current coordinator
+        if self.coordinator is not None:
+            self.send_message(self.nodes[f'node{from_node_id}']['hostname'], self.nodes[f'node{from_node_id}']['port'], f'COORDINATOR_INFO {self.coordinator}')
 
+
+    def handle_coordinator_info(self, from_node_id, coordinator_id):
+        # Update the coordinator information based on the received message
+        with self.mutex:
+            if self.coordinator is None or self.coordinator != coordinator_id:
+                self.coordinator = coordinator_id
+                print(f"Updated coordinator to {coordinator_id} based on info from Node {from_node_id}")
+                
     def handle_new_coordinator(self, coordinator_id):
         with self.mutex:
             self.coordinator = coordinator_id
@@ -250,24 +297,12 @@ class Node(threading.Thread):
             self.send_message(self.nodes[f'node{from_node_id}']['hostname'], self.nodes[f'node{from_node_id}']['port'], 'ELECTION_RESPONSE')
 
 
-    def send_message(self, hostname, port, message):
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.connect((hostname, port))
-                sock.sendall(f"{message} {self.pid}".encode())
-                # print(f"Sent {message} to {hostname}:{port}")
-        except ConnectionRefusedError:
-            # print(f"Unable to connect to node at {hostname}:{port}")
-            pass
-        except Exception as e:
-            print(f"Error while sending message to {hostname}:{port}: {e}")
 
 
-
-# node = Node(1, 'localhost', 5010, testNodes,  redis.StrictRedis(host='localhost', port=6379))
-# node = Node(2, 'localhost', 5020, testNodes,  redis.StrictRedis(host='localhost', port=6379))
-node = Node(3, 'localhost', 5030, testNodes,  redis.StrictRedis(host='localhost', port=6379))
+# node = Node(1, 'localhost', 5010, nodes,  redis.StrictRedis(host='localhost', port=6379))
+node = Node(2, 'localhost', 5020, nodes,  redis.StrictRedis(host='localhost', port=6379))
+# node = Node(3, 'localhost', 5030, nodes,  redis.StrictRedis(host='localhost', port=6379))
 node.start()
-node.start_election()
+# node.start_election()
 node.run_server()
 
