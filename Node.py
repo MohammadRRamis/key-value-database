@@ -2,7 +2,8 @@ import threading
 import time
 import socket
 import threading
-import redis
+import json
+import pickle
 from uhashring import HashRing
 
 
@@ -61,7 +62,7 @@ class Node(threading.Thread):
 
         #when a new node joins the system, it will ask about the coordinator information
         self.request_coordinator_info()
-        time.sleep(2)
+        time.sleep(1)
         self.notify_recovery()
         while True:
             self.send_heartbeat() #to enform other nodes that 'i am alive'
@@ -95,17 +96,17 @@ class Node(threading.Thread):
                     # If the failing node is the coordinator, start an election
                     if node_id == self.coordinator:
                         print(f"Node {self.pid} detected that the coordinator (Node {node_id}) has failed.")
+                        # self.nodes[f'node{node_id}']['isAlive'] = False
                         self.start_election()
                     # If this node is the coordinator and detects another node's failure, update the list and broadcast
                     elif self.pid == self.coordinator and self.nodes[f'node{node_id}']['isAlive']:
                         self.nodes[f'node{node_id}']['isAlive'] = False
                         print(f"Coordinator (Node {self.pid}) detected that Node {node_id} has failed.")
-                        # self.broadcast_updated_node_list()
+                        self.broadcast_updated_node_list(node_id, False)
 
             # If this node thinks there's no coordinator and an election is not in progress, start an election
             if self.coordinator is None and not self.election_in_progress:
                 self.start_election()
-
 
 
     def send_message_to_node(self, node_name, message):
@@ -117,7 +118,6 @@ class Node(threading.Thread):
         except ConnectionRefusedError:
             # print(f"Unable to connect to node {node_name} at {node_info['hostname']}:{node_info['port']}")
             pass
-
 
 
     def become_coordinator(self):
@@ -170,44 +170,57 @@ class Node(threading.Thread):
         except Exception as e:
             print(f"Error while sending message to {hostname}:{port}: {e}")
 
-
     def handle_client(self, conn):
         with conn:
             while True:
-                data = conn.recv(1024)
+                data = conn.recv(2024)
                 if not data:
                     break
-     
-                # message, node_id = data.decode().split()
-                # node_id = int(node_id)
 
-                # Split the message into parts
+                
+
+
                 parts = data.decode().split()
-                message = parts[0]
-                node_id = int(parts[1])
+                if len(parts) >= 2:
+                    message = parts[0]
+                    node_id = int(parts[1])
 
-                #don't print the heartbeat message, because it will do it forever
-                if(message != "HEARTBEAT"):
+                # Don't print the heartbeat message, because it will do it forever
+                if message != "HEARTBEAT" and message != "UPDATE":
                     print(f"Received {message} from Node {node_id}")
 
-                if message == 'HEARTBEAT':
-                    self.handle_heartbeat(node_id)
-                elif message == 'ELECTION':
-                    self.handle_election_message(node_id)
-                elif message == 'COORDINATOR':
-                    self.receive_coordinator_message(node_id)
-                elif message == 'NEW_COORDINATOR':
-                    self.handle_new_coordinator(node_id)
-                elif message == 'COORDINATOR_REQUEST':
-                    self.handle_coordinator_request(node_id)
-                elif message == 'COORDINATOR_INFO':
-                    coordinator_id = int(parts[2])
-                    self.handle_coordinator_info(node_id, parts)
-                elif message == 'NODE_LIST_UPDATE':
-                    self.update_node_list(parts[1])
-                elif message == 'RECOVERY':
-                    self.handle_recovery(node_id)
-             # ... other message handling as needed ...
+                self.handle_messages(message, node_id, parts)
+
+
+    def handle_messages(self, message, node_id, parts):
+            if message == 'HEARTBEAT':
+                self.handle_heartbeat(node_id)
+            elif message == 'ELECTION':
+                self.handle_election_message(node_id)
+            elif message == 'COORDINATOR':
+                self.receive_coordinator_message(node_id)
+            elif message == 'NEW_COORDINATOR':
+                self.handle_new_coordinator(node_id)
+            elif message == 'COORDINATOR_REQUEST':
+                self.handle_coordinator_request(node_id)
+            elif message == 'COORDINATOR_INFO':
+                self.handle_coordinator_info(node_id, parts)
+            elif message == 'RECOVERY':
+                self.handle_recovery(node_id)
+            elif message == 'UPDATE':
+                self.handle_status_update(parts)
+
+
+    def handle_status_update(self, parts):
+        node_id = parts[1]
+        isAlive = parts[2]
+        # Update the node's status in the local dictionary
+        with self.heartbeat_lock: 
+            node_exists = any(node_info['id'] == int(node_id) for node_info in self.nodes.values())
+            if node_exists:
+                self.nodes['node'+node_id]['isAlive'] = isAlive
+                print(f"Node {node_id} status updated to {isAlive}.")
+        
 
     def receive_coordinator_message(self, new_coordinator_id):
         with self.mutex:
@@ -218,16 +231,16 @@ class Node(threading.Thread):
     def handle_recovery(self, node_id):
         # Update the status of the recovered node
         with self.heartbeat_lock:
-            if node_id in self.nodes:
+            node_exists = any(node_info['id'] == node_id for node_info in self.nodes.values())
+            if node_exists:
                 self.nodes[f'node{node_id}']['isAlive'] = True
                 print(f"Node {node_id} has recovered and is now marked as alive.")
-                self.broadcast_updated_node_list()
+                self.broadcast_updated_node_list(node_id, True)
 
     def handle_coordinator_request(self, from_node_id):
         # Respond with coordinator information if this node is aware of the current coordinator
         if self.coordinator is not None:
             self.send_message(self.nodes[f'node{from_node_id}']['hostname'], self.nodes[f'node{from_node_id}']['port'], f'COORDINATOR_INFO {self.coordinator}')
-
 
     def handle_coordinator_info(self, from_node_id, message_parts):
         # Assuming the coordinator ID is the second part of the message
@@ -254,11 +267,20 @@ class Node(threading.Thread):
             self.send_message(self.nodes[f'node{from_node_id}']['hostname'], self.nodes[f'node{from_node_id}']['port'], 'ELECTION_RESPONSE')
 
 
+    #the coordinator 
+    def broadcast_updated_node_list(self, node_id, isAlive):
 
+        message = f"UPDATE {node_id} {isAlive}"
+        # Send this message to all other nodes except this one
+        for target_node_name, target_node_info in self.nodes.items():
+               if target_node_info['id'] != self.pid:
+                self.send_message(target_node_info['hostname'], target_node_info['port'], message)
 
-# node = Node(1, 'localhost', 5010, nodes)
+        
+
+node = Node(1, 'localhost', 5010, nodes)
 node = Node(2, 'localhost', 5020, nodes)
-# node = Node(3, 'localhost', 5030, nodes)
+node = Node(3, 'localhost', 5030, nodes)
 
 node.start()
 node.run_server()
