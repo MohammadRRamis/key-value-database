@@ -30,11 +30,9 @@ class MessageHandler:
                 self.handle_recovery(node_id)
             elif message == 'NODES-UPDATE':
                 self.handle_status_update(parts)
-            # elif message in 'COMMAND':
+            # elif 'COMMAND' in message:
+            #     print("yes")
             #     self.handle_command(parts)
-            elif message == 'SUCCESS':
-                # send the response to client
-                pass
                 
     def handle_status_update(self, parts):
         node_id = parts[1]
@@ -94,21 +92,22 @@ class MessageHandler:
 
     #the command is sent only from the coordinator
     def handle_command(self, parts):
-        "COMMAND CREATE KEY VALUE"
+        "COMMAND CREATE KEY VALUE CLIENT_CONN"
+ 
         command = parts[1]
         key = parts[2]
         value = parts[3]
+        client_id = parts[5]
 
         """
         if the the node successfully created the key, 
         send a message to the coordinator
         """
-
+   
         if command in ['CREATE', 'READ', 'UPDATE', 'DELETE']:
             if (command == 'CREATE'):
                 response = create(self.Node.nodename, key, value)
-                
                 coordinator_name = 'node'+str(self.Election.coordinator)
                 #response is either:
-                    # "FAIL Duplicated Key" or "SUCCESS"
-                self.Network.send_message_to_node(coordinator_name, response)
+                # "FAIL Duplicated Key" or "SUCCESS"
+                self.Network.send_response_to_coordinator(coordinator_name, response, client_id)

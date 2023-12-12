@@ -97,8 +97,8 @@ nodes = {
 }    
 
 node = Node(1, 'localhost', 5004, nodes)
-# node = Node(2, 'localhost', 5020, nodes)
-# node = Node(3, 'localhost', 5030, nodes)
+node = Node(2, 'localhost', 5020, nodes)
+node = Node(3, 'localhost', 5030, nodes)
 
 node.start()
 node.Network.run_server()

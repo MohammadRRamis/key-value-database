@@ -34,6 +34,11 @@ def process_command(sock, command, args):
         delete(sock, args)
     else:
         print("Invalid command.")
+        return
+
+        # Wait for response from the server
+    response = sock.recv(1024).decode()
+    print("Response:", response)
 
 
 def main():
