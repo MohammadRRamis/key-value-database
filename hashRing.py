@@ -39,11 +39,15 @@ def save_data(nodename, key, value):
         data = {}
 
     # Update the data with the new key-value pair
+    if key in data:
+        print(key)
+        return "FAIL Duplicated Key"
     data[key] = value
 
     # Write the updated data back to the file
     with open(filename, 'w') as file:
         json.dump(data, file, indent=4)
+    return f"SUCCESS Key-Value added"
 
 
 
@@ -57,11 +61,9 @@ def load_node_data(node_id):
         return None
     
 
-
-
-
 def create(nodename, key, value):
-    save_data(nodename, key, value)
+    response = save_data(nodename, key, value)
+    return response
 
 
 def read(nodename, key):

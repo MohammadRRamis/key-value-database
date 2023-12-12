@@ -65,6 +65,7 @@ class MessageHandler:
         # Respond with coordinator information if this node is aware of the current coordinator
         if self.Election.coordinator is not None:
             self.Network.send_message(self.Node.nodes[f'node{from_node_id}']['hostname'], self.Node.nodes[f'node{from_node_id}']['port'], f'COORDINATOR_INFO {self.Election.coordinator}')
+    
 
 
     def handle_coordinator_info(self, from_node_id, message_parts):
@@ -84,6 +85,7 @@ class MessageHandler:
         if self.Node.node_id > from_node_id:
             self.Network.send_message(self.Node.nodes[f'node{from_node_id}']['hostname'], self.Node.nodes[f'node{from_node_id}']['port'], 'ELECTION_RESPONSE')
 
+
     def receive_coordinator_message(self, new_coordinator_id):
         with self.Node.mutex:
             if self.Node.isAlive:
@@ -92,7 +94,7 @@ class MessageHandler:
 
     #the command is sent only from the coordinator
     def handle_command(self, parts):
-        # command = parts[0]
+        "COMMAND CREATE KEY VALUE"
         command = parts[1]
         key = parts[2]
         value = parts[3]
@@ -101,10 +103,12 @@ class MessageHandler:
         if the the node successfully created the key, 
         send a message to the coordinator
         """
+
         if command in ['CREATE', 'READ', 'UPDATE', 'DELETE']:
             if (command == 'CREATE'):
-                create(self.Node.nodename, key, value)
+                response = create(self.Node.nodename, key, value)
                 
                 coordinator_name = 'node'+str(self.Election.coordinator)
-                message = f'SUCCESS {self.Node.node_id}'
-                self.Network.send_message_to_node(coordinator_name, message)
+                #response is either:
+                    # "FAIL Duplicated Key" or "SUCCESS"
+                self.Network.send_message_to_node(coordinator_name, response)

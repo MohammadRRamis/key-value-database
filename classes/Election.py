@@ -23,6 +23,7 @@ class Election:
             for node in higher_nodes:
                 self.Network.send_message(node['hostname'], node['port'], 'ELECTION')
 
+
             # Wait for responses
             time.sleep(2)
 
@@ -49,6 +50,6 @@ class Election:
 
     def request_coordinator_info(self):
         message = f'COORDINATOR_REQUEST {self.Node.node_id}'
-        for node_name, node_info in self.Node.nodes.items():
+        for nodename, node_info in self.Node.nodes.items():
             if node_info['id'] != self.Node.node_id:
                 self.Network.send_message(node_info['hostname'], node_info['port'], message)   

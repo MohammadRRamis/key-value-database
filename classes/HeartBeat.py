@@ -15,9 +15,10 @@ class Heartbeat:
         self.Network = Network
 
     def send_heartbeat(self):
-        for node_name, node_info in self.Node.nodes.items():
+        for nodename, node_info in self.Node.nodes.items():
             if node_info['id'] != self.Node.node_id:
                 self.Network.send_message(node_info['hostname'], node_info['port'], 'HEARTBEAT')
+ 
 
     def monitor_heartbeats(self):
         current_time = time.time()
@@ -51,4 +52,5 @@ class Heartbeat:
         if self.Election.coordinator is not None and self.Election.coordinator != self.Node.node_id:
             coordinator_info = self.Node.nodes[f'node{self.Election.coordinator}']
             self.Network.send_message(coordinator_info['hostname'], coordinator_info['port'], f'RECOVERY {self.Node.node_id}')
+
 
