@@ -50,5 +50,5 @@ def run_client(server_host, server_port):
            
 if __name__ == "__main__":
     SERVER_HOST = 'localhost'  # Replace with actual server host
-    SERVER_PORT = 5003        # Replace with actual server port
+    SERVER_PORT = 5003       # Replace with actual server port
     run_client(SERVER_HOST, SERVER_PORT)
