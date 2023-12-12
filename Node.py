@@ -7,29 +7,7 @@ import pickle
 
 
 
-nodes = {
-    'node1': {
-        'id': 1,
-        'hostname': 'localhost',
-        'port': 5010,
-        'isAlive': True,
-        
-    },
-    'node2': {
-        'id': 2,
-        'hostname': 'localhost',
-        'port': 5020,
-        'isAlive': True,
-    },
-    'node3': {
-        'id': 3,
-        'hostname': 'localhost',
-        'port': 5030,
-        'isAlive': True,
-    },
-}
-
-from HashRing import hashRing
+from HashRing import hashRing, create, read, delete
 
 class Node(threading.Thread):
 
@@ -79,13 +57,11 @@ class Node(threading.Thread):
             if node_info['id'] != self.pid:
                 self.send_message(node_info['hostname'], node_info['port'], 'HEARTBEAT')
 
-
     def notify_recovery(self):
         # Send a message to the coordinator indicating that this node has recovered
         if self.coordinator is not None and self.coordinator != self.pid:
             coordinator_info = self.nodes[f'node{self.coordinator}']
             self.send_message(coordinator_info['hostname'], coordinator_info['port'], f'RECOVERY {self.pid}')
-
 
     def monitor_heartbeats(self):
         current_time = time.time()
@@ -114,7 +90,6 @@ class Node(threading.Thread):
             if self.coordinator is None and not self.election_in_progress:
                 self.start_election()
 
-
     def send_message_to_node(self, node_name, message):
         node_info = self.nodes[node_name]
         try:
@@ -125,19 +100,17 @@ class Node(threading.Thread):
             # print(f"Unable to connect to node {node_name} at {node_info['hostname']}:{node_info['port']}")
             pass
 
-
     def become_coordinator(self):
         print(f"Node {self.pid} becomes the coordinator")
         
-        #when the old coordinator fails, the new coordinator will have access to the hash-ring 
+        #when the old coordinator fails, the new coordinator will know have access to the hash-ring 
         self.start_hash_ring()
         print(self.hr)
 
         self.coordinator = self.pid
         for node_name, node_info in self.nodes.items():
             if node_info['id'] != self.pid:
-                self.send_message_to_node(node_name, 'COORDINATOR')
-                
+                self.send_message_to_node(node_name, 'COORDINATOR')     
 
     def start_election(self):
         if not self.election_in_progress:
@@ -160,7 +133,6 @@ class Node(threading.Thread):
 
             self.election_in_progress = False
     
-
     def run_server(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
             server_socket.bind((self.hostname, self.port))
@@ -187,21 +159,41 @@ class Node(threading.Thread):
                 data = conn.recv(2024)
                 if not data:
                     break
+                data = data.decode()
+                parts = data.split()
 
+                if parts[0] in ['CREATE', 'READ', 'UPDATE', 'DELETE']:
+                    
+                    #Example of request: CREATE KEY VALUE
+                    command = parts[0]
+
+                    if self.coordinator:
+                        # Handle the command (CREATE, READ, DELETE) directly
+                        self.process_client_request(data, command)
+                    else:
+                        # Redirect client to the coordinator
+                        self.redirect_to_coordinator(conn, data)
                 
+                #if the request comes from other node in the system
+                else: 
+                    if len(parts) <= 3:
+                        message = parts[0]
+                        node_id = int(parts[1])
 
+                    #if the message is a command 
+                    #COMMAND CREATE KEY VALUE
+                    elif len(parts) == 4:
+                        # operation = parts[1]
+                        # key = parts[2]
+                        # value = parts[3]
+                        self.handle_command(parts)
+                        continue
 
-                parts = data.decode().split()
-                if len(parts) >= 2:
-                    message = parts[0]
-                    node_id = int(parts[1])
+                    # Don't print the heartbeat message, because it will do it forever
+                    if message != "HEARTBEAT" and message != "UPDATE":
+                        print(f"Received {message} from Node {node_id}")
 
-                # Don't print the heartbeat message, because it will do it forever
-                if message != "HEARTBEAT" and message != "UPDATE":
-                    print(f"Received {message} from Node {node_id}")
-
-                self.handle_messages(message, node_id, parts)
-
+                    self.handle_messages(message, node_id, parts)
 
     def handle_messages(self, message, node_id, parts):
             if message == 'HEARTBEAT':
@@ -218,9 +210,33 @@ class Node(threading.Thread):
                 self.handle_coordinator_info(node_id, parts)
             elif message == 'RECOVERY':
                 self.handle_recovery(node_id)
-            elif message == 'UPDATE':
+            elif message == 'NODES-UPDATE':
                 self.handle_status_update(parts)
+            elif message == 'SUCCESS':
+                # send the response to client
+                pass
+            # elif message in 'COMMAND':
+            #     self.handle_command(parts)
 
+    def handle_command(self, parts):
+        # command = parts[0]
+        command = parts[1]
+        key = parts[2]
+        value = parts[3]
+
+        """
+        if the the node successfully created the key, 
+        send a message to the coordinator
+        """
+        if command in ['CREATE', 'READ', 'UPDATE', 'DELETE']:
+            if (command == 'CREATE'):
+                create(self.nodename, key, value)
+                
+                coordinator_name = 'node'+str(self.coordinator)
+                message = f'SUCCESS {self.pid}'
+                self.send_message_to_node(coordinator_name, message)
+                
+                
 
     def handle_status_update(self, parts):
         node_id = parts[1]
@@ -231,7 +247,6 @@ class Node(threading.Thread):
             if node_exists:
                 self.nodes['node'+node_id]['isAlive'] = isAlive
                 print(f"Node {node_id} status updated to {isAlive}.")
-        
 
     def receive_coordinator_message(self, new_coordinator_id):
         with self.mutex:
@@ -260,8 +275,7 @@ class Node(threading.Thread):
             if self.coordinator is None or self.coordinator != coordinator_id:
                 self.coordinator = coordinator_id
                 print(f"Updated coordinator to {coordinator_id} based on info from Node {from_node_id}")
-
-                
+      
     def handle_new_coordinator(self, coordinator_id):
         with self.mutex:
             self.coordinator = coordinator_id
@@ -271,22 +285,19 @@ class Node(threading.Thread):
         # Update the last received heartbeat timestamp for the node
         self.heartbeats[node_id] = time.time()
 
-
     def handle_election_message(self, from_node_id):
     # Respond to the election message if this node's ID is higher
         if self.pid > from_node_id:
             self.send_message(self.nodes[f'node{from_node_id}']['hostname'], self.nodes[f'node{from_node_id}']['port'], 'ELECTION_RESPONSE')
 
-
     #the coordinator 
     def broadcast_updated_node_list(self, node_id, isAlive):
 
-        message = f"UPDATE {node_id} {isAlive}"
+        message = f"NODES-UPDATE {node_id} {isAlive}"
         # Send this message to all other nodes except this one
         for target_node_name, target_node_info in self.nodes.items():
                if target_node_info['id'] != self.pid:
                 self.send_message(target_node_info['hostname'], target_node_info['port'], message)
-
 
     def start_hash_ring(self):
         # coordinator will start the hashring, with the updated list of nodes
@@ -294,15 +305,72 @@ class Node(threading.Thread):
         alive_nodes = {node_id: node_info for node_id, node_info in self.nodes.items() if node_info['isAlive']}
         self.hr = hashRing(alive_nodes)
 
-
-
-    def forward_request_to_coordiantor():
+    def redirect_to_coordinator():
         pass 
 
-    def client_request():
-        pass 
+    def process_client_request(self, data, command):
+        parts = data.split()
+        key = parts[1]
+        target_node = self.hr.get_node(key)
+        
+        #if the coordiantor does no have the key in his database
+        #send a request to the target_node to get the value
+        #then send the value to the client
+        if (self.nodename != target_node):
+            #Format:  COMMAND CREATE KEY VALUE
+            message = f"COMMAND {data}"
+            
+            response = self.send_request_wait_for_response(target_node, message)
+            print(response)
+        else:
+            if command == 'CREATE':
+                value = parts[2]
+                create(target_node, key, value)
+            elif command == 'read':
+                read(target_node, key)
+            elif command == 'delete':
+            # Logic for handling 'delete' command
+                pass
 
-node = Node(1, 'localhost', 5010, nodes)
+    def send_request_wait_for_response(self, target_node, message):
+        node_info = self.nodes[target_node]
+        
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.connect((node_info['hostname'], node_info['port']))
+                sock.sendall(message.encode('utf-8'))
+                
+                # Wait for the response from the target node
+                response = sock.recv(1024)
+                return response.decode('utf-8')
+        except ConnectionError as e:
+            return f"Error connecting to node {target_node}: {e}"
+
+
+
+
+nodes = {
+    'node1': {
+        'id': 1,
+        'hostname': 'localhost',
+        'port': 5003,
+        'isAlive': True,
+    },
+    'node2': {
+        'id': 2,
+        'hostname': 'localhost',
+        'port': 5020,
+        'isAlive': True,
+    },
+    'node3': {
+        'id': 3,
+        'hostname': 'localhost',
+        'port': 5030,
+        'isAlive': True,
+    },
+}    
+
+node = Node(1, 'localhost', 5003, nodes)
 node = Node(2, 'localhost', 5020, nodes)
 node = Node(3, 'localhost', 5030, nodes)
 

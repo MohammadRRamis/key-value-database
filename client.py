@@ -1,50 +1,54 @@
-# from hashRing import ring, removeNode
-# import time
+import socket
+
+
+def send_request(server_host, server_port, request):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.connect((server_host, server_port))
+        sock.sendall(request.encode('utf-8'))
+        response = sock.recv(1024).decode('utf-8')
+        return response
+
+def create(server_host, server_port, key, value):
+    return send_request(server_host, server_port, f"CREATE {key} {value}")
+
+def read(server_host, server_port, key):
+    return send_request(server_host, server_port, f"READ {key}")
+
+def update(server_host, server_port, key, value):
+    return send_request(server_host, server_port, f"UPDATE {key} {value}")
+
+def delete(server_host, server_port, key):
+    return send_request(server_host, server_port, f"DELETE {key}")
 
 
 
-# # we need to ensure the client is aware of the node information 
-# # and that the HashRing is utilized correctly for distributing keys across the nodes
+def run_client(server_host, server_port):
+    while True:
+        user_input = input("Enter command (CREATE, READ, UPDATE, DELETE) and arguments, or 'exit' to quit: ")
+        if user_input.lower() == 'exit':
+            break
 
-# # Initialize the client with node information
-# hr = ring()
+        parts = user_input.split()
+        if len(parts) < 2:
+            print("Invalid command format.")
+            continue
 
-# # # Remove "node2" from the hash ring
-# # print(hr.get_nodes())
-# # # removeNode('node2')
-# # removeNode('node1')
-# # print(hr.get_nodes())
-# # print(hr["1"].get("1"))
+        command, key = parts[0], parts[1]
+        value = parts[2] if len(parts) > 2 else None
 
+        if command.upper() == 'CREATE' and value:
+            print(create(server_host, server_port, key, value))
+        elif command.upper() == 'READ':
+            print(read(server_host, server_port, key))
+        elif command.upper() == 'UPDATE' and value:
+            print(update(server_host, server_port, key, value))
+        elif command.upper() == 'DELETE':
+            print(delete(server_host, server_port, key))
+        else:
+            print("Unknown command or missing value.")
 
-
-
-# while True:
-#     print("Available actions: create, read, update, delete, exit")
-#     action = input("Enter action: ")
-
-#     if action == 'exit':
-#         break
-    
-#     if action in ['create', 'read', 'update', 'delete']:
-#         key = input("Enter key: ")
-
-#         if action == 'create' or action == 'update':
-#             hr = ring()
-#             value = input("Enter value: ")
-#             if action == 'create':
-#                 hr[key].set(key,value)
-#                 print(hr[key])
-  
-                
-#         #     elif action == 'update':
-#         #         client.update(key, value)
-#         elif action == 'read':
-#             hr = ring()
-#             result = hr[key].get(key)
-#             print(result)
-#             print(hr[key])
-#         # elif action == 'delete':
-#         #     client.delete(key)
-#     else:
-#         print("Invalid action. Please try again.")
+           
+if __name__ == "__main__":
+    SERVER_HOST = 'localhost'  # Replace with actual server host
+    SERVER_PORT = 5003        # Replace with actual server port
+    run_client(SERVER_HOST, SERVER_PORT)
