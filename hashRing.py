@@ -1,27 +1,16 @@
 from uhashring import HashRing
-import json
 import socket
+import json
+import threading
+file_lock = threading.Lock()
+
+
+
 
 def hashRing(nodes):
     hr = HashRing(nodes)
     return hr
 
-
-import json
-
-
-# def get_next_node(nodes, current_node_name):
-#     # Assuming self.nodes is a dictionary where keys are node names
-#     nodenames = sorted(nodes)  # Get sorted list of node names
-
-#     # Find the index of the current node
-#     current_index = nodenames.index(current_node_name)
-
-#     # Calculate the index of the next node
-#     next_index = (current_index + 1) % len(nodenames)
-
-#     # Return the name of the next node
-#     return nodenames[next_index]
 
 def get_previous_node(nodes, current_node_name):
     nodenames = sorted(nodes)  # Get sorted list of node names
@@ -33,30 +22,64 @@ def get_previous_node(nodes, current_node_name):
     # The '% len(nodenames)' ensures that the index wraps around the list
     prev_index1 = (current_index - 1) % len(nodenames)
 
-    # Return the names of the previous two nodes
+    # Return the names of the previou node
     return nodenames[prev_index1]
 
+def get_next_node(nodes, current_node_name):
+    nodenames = sorted(nodes)  # Get sorted list of node names
+    # Ensure current node is in the list of nodes
+    if current_node_name not in nodes:
+        raise ValueError(f"Node {current_node_name} not found in the list of nodes")
+
+    # Find the index of the current node
+    current_index = nodenames.index(current_node_name)
+
+    # Calculate the index of the next node, wrapping around if necessary
+    next_index = (current_index + 1) % len(nodenames)
+
+    # Return the name of the next node
+    return nodenames[next_index]
 
 
-def save_data(nodename, key, value):
-    filename = f'{nodename}.json'
 
-    # Load existing data from the file, if it exists
+import json
+
+def read_json_file(nodename):
+    """
+    Reads a JSON file and returns the data as a Python dictionary.
+
+    :param nodename
+    :return: A dictionary containing the key-value pairs from the JSON file.
+    """
     try:
-        with open(filename, 'r') as file:
+        with open(f'{nodename}.json', 'r') as file:
             data = json.load(file)
-    except (FileNotFoundError, json.JSONDecodeError):
-        data = {}
+            return data
+    except Exception as e:
+        print(e)
 
-    # Update the data with the new key-value pair
-    if key in data:
-        return "FAILED-Duplicated-Key"
-    data[key] = value
+    
+def save_data(nodename, key, value):
+    with file_lock:
+        filename = f'{nodename}.json'
 
-    # Write the updated data back to the file
-    with open(filename, 'w') as file:
-        json.dump(data, file, indent=4)
-    return f"SUCCESS-({key}:{value})-added"
+        # Load existing data from the file, if it exists
+        try:
+            with open(filename, 'r') as file:
+                data = json.load(file)
+        except (FileNotFoundError, json.JSONDecodeError):
+            data = {}
+
+        # Update the data with the new key-value pair
+        if key in data:
+            return "FAILED-Duplicated-Key"
+        data[key] = value
+
+        # Write the updated data back to the file
+        with open(filename, 'w') as file:
+            json.dump(data, file, indent=4)
+            print(f"SUCCESS-({key}:{value})-added")
+        return f"SUCCESS-({key}:{value})-added"
 
 
 
@@ -93,40 +116,55 @@ def get_target_node_id(key, hash_ring):
     return hash_ring.get_node(key)
 
 
-# """
-# In case of a failure, the keys-values in the failed nodes needs to be 
-# distributed to other nodes in the ring using the "replication" of the failed node
-# """
-# def removeNode(nodename, nodes):
-#     # Create a temporary HashRing without the node being removed
-#     temp_nodes = nodes.copy()
-#     del temp_nodes[nodename]
-#     temp_hr = HashRing(temp_nodes)
+def add_node(hash_ring, nodes, nodename):
+    # Step 1: Add the node back to the hash ring
+    hash_ring.add_node(nodename)
+    
 
-#     try:
-#         replica = nodes[nodename].get('replica')
-#         keys = replica.keys()
-#         for key in keys:
-#             value = replica.get(key)
-#             new_node_name = temp_hr.get_node(key)
-#             if new_node_name != nodename:
-#                 nodes[new_node_name].get('instance').set(key,value)
-#     except AttributeError:
-#         print("their are not keys in this node")
+    # Step 2: Identify the source node for data replication
+    predecessor = get_previous_node(nodes, nodename)
+    if not is_node_alive(predecessor, nodes):
+        predecessor = get_previous_node(hash_ring, predecessor)
 
-#     nodes[nodename]['isAlive'] = False
-#     hr.remove_node(nodename)
+    # Step 3: Identify the next node for data replication
+    successor = get_next_node(nodes, nodename)
+    if not is_node_alive(successor, nodes):
+        successor = get_next_node(hash_ring, predecessor)
 
-#     print(f"Node {nodename} removed successfully.")
+    # Step 4: Handle data transfer from the source node to the newly added node
+    if is_node_alive(predecessor, nodes):
+        request_replicated_data(predecessor, nodename, nodes)
+
+    if is_node_alive(successor, nodes):
+        request_replicated_data(successor, nodename, nodes)
+
+
+#The source node is the node that currently holds the data that needs to be replicated or transferred.
+#connect to the node that has the replicated data
+def request_replicated_data(source_node_name, target_node_name, nodes):
+    source_host = nodes[source_node_name]['hostname']
+    source_port = nodes[source_node_name]['port']
+    
+    try:
+        # Connect to the source node to retrieve relevant data
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as source_socket:
+            source_socket.connect((source_host, source_port))
+
+            # Request only the keys that belong to the target node's hash range
+            message = f"GET_REPLICATED_DATA {target_node_name}"
+            source_socket.sendall(message.encode())
+    except Exception as e:
+        print(f"Error during data transfer: {e}")
+
+
+def is_node_alive(nodename, nodes):
+    return nodes[nodename]['isAlive']
+
 
 # def addNode(nodename, nodes):
 #     if nodename in nodes and nodes[nodename]["isAlive"] == False:
 #         nodes[nodename]["isAlive"] = True
 #         hr.add_node(nodename)
-
-#     # temp_nodes = nodes.copy()
-#     # add temp_nodes[nodename]
-#     # temp_hr = HashRing(temp_nodes)
 
 #     # Identify the node which might have keys to be redistributed to the new node
 #     # For simplicity, we're just checking the next node in the ring
@@ -154,21 +192,6 @@ def get_target_node_id(key, hash_ring):
 #             nodes[target_node].get('instance').set(key,value)
 #             # nodes[target_node]['instance'].set(key, value)
 #             source_instance.delete(key)
-
-
-
-# def getNodeAfter(hr, nodename): 
-#     """
-#     Get the next node in the hash ring after the specified node.
-#     """
-#     sorted_nodes = sorted(hr.get_nodes())
-#     current_index = sorted_nodes.index(nodename)
-
-#     # the mod (%) is used to "wrap around" if the index goes beyond the length of the list. 
-#     next_index = (current_index + 1) % len(sorted_nodes)
-#     return sorted_nodes[next_index]
-
-
 
 
 

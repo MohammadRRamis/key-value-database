@@ -1,7 +1,7 @@
 import socket
 import threading
 
-from hashRing import create, read, delete, get_previous_node
+from HashRing import create, read, delete, get_previous_node
 
 class Network:
     def __init__(self, Node, hostname, port):
@@ -98,6 +98,14 @@ class Network:
         if parts[0] == "NODE-CLIENT-RESPONSE":
             self.handle_response(parts)
 
+        #when a node is back alive
+        #the coordinator will send a message to that node replicas, in order to re-distribute the data
+        #the replica node, must know send the keys to their correct hashed value (replica node -> node)
+        elif parts[0] == "GET_REPLICATED_DATA":
+            to_node = parts[1]
+            self.MessageHandler.handle_replicated_data(self.Node.nodename, to_node)
+
+
         elif len(parts) <= 3 or parts[0] == "NODES-UPDATE":
             message = parts[0]
             node_id = int(parts[1])
@@ -125,52 +133,57 @@ class Network:
 
 
     def process_client_request(self, data, command, client_conn, client_id):
-        parts = data.split()
-        key = parts[1]
+        with self.Node.mutex:
+            parts = data.split()
+            key = parts[1]
 
-        #find the next two nodes, to replicate the data
-        target_node = self.Node.hr.get_node(key)
-        print(target_node)
+            #find the next two nodes, to replicate the data
+            target_node = self.Node.hr.get_node(key)
+            print(target_node)
 
-        #get the list of the alive nodes in the ring
-        hr_nodes = self.Node.hr.get_nodes()
-        next_node1 = get_previous_node(hr_nodes, target_node)
-        next_node2 = get_previous_node(hr_nodes, next_node1)
-        
-        #if the coordiantor does no have the key in his database
-        #send a request to the target_node to get the value
-        #then send the value to the client
-        if (self.Node.nodename != target_node):
-            #Format:  COMMAND CREATE KEY VALUE
-            message = f"COMMAND {data}"
-            replication_message = f"REPLICATION {data}"
+            #get the list of the alive nodes in the ring
+            # hr_nodes = self.Node.hr.get_nodes()
+            hr_nodes = self.Node.nodes.keys()
+            next_node1 = get_previous_node(hr_nodes, target_node)
+            next_node2 = get_previous_node(hr_nodes, next_node1)
             
+            #if the coordiantor does no have the key in his database
+            #send a request to the target_node to get the value
+            #then send the value to the client
+            replication_message = f"REPLICATION {data}"
+            if (self.Node.nodename != target_node):
+                #Format:  COMMAND CREATE KEY VALUE
+                message = f"COMMAND {data}"
+                # replication_message = f"REPLICATION {data}"
+                
 
-            self.send_message_to_node(target_node, message, client_id)
-            if parts[0] in ['CREATE', 'UPDATE', 'DELETE']:
-                self.send_message_to_node(next_node1, replication_message, client_id)
-                self.send_message_to_node(next_node2, replication_message, client_id)
-            #send response to the client
+                self.send_message_to_node(target_node, message, client_id)
+                if parts[0] in ['CREATE', 'UPDATE', 'DELETE']:
+                    self.send_message_to_node(next_node1, replication_message, client_id)
+                    self.send_message_to_node(next_node2, replication_message, client_id)
+                #send response to the client
 
-        # If the target node is this node, process the request and respond to the client
-        else:
-            if command == 'CREATE':
-                value = parts[2]
-                response = create(target_node, key, value)
-                create(next_node1, key, value)
-                create(next_node2, key, value)
-                client_conn.sendall(response.encode())
+            # If the target node is this node, process the request and respond to the client
+            else:
+                if command == 'CREATE':
+                    value = parts[2]
+                    response = create(target_node, key, value)
+                    #check alive 
 
-            elif command == 'READ':
-                target_node = self.Node.hr.get_node(key)
-                response = read(target_node, key)
-                client_conn.sendall(response.encode())
+                    self.send_message_to_node(next_node1, replication_message, client_id)
+                    self.send_message_to_node(next_node2, replication_message, client_id)
+                    client_conn.sendall(response.encode())
 
-            elif command == 'DELETE':
-                pass
+                elif command == 'READ':
+                    target_node = self.Node.hr.get_node(key)
+                    response = read(target_node, key)
+                    client_conn.sendall(response.encode())
 
-            elif command == 'UPDATE':
-                pass
+                elif command == 'DELETE':
+                    pass
+
+                elif command == 'UPDATE':
+                    pass
 
     def send_response_to_coordinator(self, coordinator_name, response, client_id):
         try:
@@ -206,7 +219,8 @@ class Network:
                 print(f"Error sending response to client: {e}")
                 # Handle disconnection, etc.
         else:
-            print(f"No active connection found for client ID {client_id}")
+            pass
+            # print(f"No active connection found for client ID {client_id}")
 
 
 

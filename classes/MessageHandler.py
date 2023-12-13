@@ -1,7 +1,7 @@
 import time
 
 
-from hashRing import hashRing, create, read, delete
+from HashRing import hashRing, create, read, delete, add_node, read_json_file, get_next_node
 
 
 class MessageHandler:
@@ -30,9 +30,7 @@ class MessageHandler:
                 self.handle_recovery(node_id)
             elif message == 'NODES-UPDATE':
                 self.handle_status_update(parts)
-            # elif 'COMMAND' in message:
-            #     print("yes")
-            #     self.handle_command(parts)
+
                 
     def handle_status_update(self, parts):
         node_id = parts[1]
@@ -49,10 +47,16 @@ class MessageHandler:
         # Update the status of the recovered node
         with self.Heartbeat.heartbeat_lock:
             node_exists = any(node_info['id'] == node_id for node_info in self.Node.nodes.values())
-            if node_exists:
+
+            isAlive = self.Node.nodes[f'node{node_id}']['isAlive']
+            if node_exists and not isAlive:
                 self.Node.nodes[f'node{node_id}']['isAlive'] = True
                 print(f"Node {node_id} has recovered and is now marked as alive.")
                 self.Node.broadcast_updated_node_list(node_id, True)
+
+                #add the new node to the hash-ring
+                nodename = f"node{node_id}"
+                add_node(self.Node.hr, self.Node.nodes, nodename)
 
     def handle_new_coordinator(self, coordinator_id):
         with self.Node.mutex:
@@ -94,7 +98,7 @@ class MessageHandler:
     def handle_command(self, parts):
         "COMMAND CREATE KEY VALUE CLIENT_CONN"
         "REPLICATION CREATE KEY VALUE CLIENT_CONN"
-
+        
         command_or_replication = parts[0]
         command = parts[1]
         key = parts[2]
@@ -123,3 +127,32 @@ class MessageHandler:
                 self.Network.send_response_to_coordinator(coordinator_name, response, client_id)
 
 
+    def handle_replicated_data(self, from_node, to_node):
+        """
+        Handles the replicated data: reads from a source node's file,
+        checks if each key belongs to the target node, and sends it if so.
+
+        :param from_node: The file name representing data from the source node.
+        :param to_node: The target node's identifier.
+        :param hr: The hash ring instance.
+        """
+
+        nodes = ["node1", "node2", "node3", "node4"]
+        hr = hashRing(nodes)
+        
+
+        next_node = get_next_node(nodes, to_node)
+        next_next_node = get_next_node(nodes, next_node)
+
+        #send a request instead of reading a json file !!!!--------------------------------------------------
+        from_node_data = read_json_file(from_node)
+        if from_node_data is None:
+            print(f"Failed to read data from {from_node}")
+            return
+        for key, value in from_node_data.items():
+            # Check if the key belongs to the target node or the value is from the next node (we should get it to replicate it)
+            get_node = hr.get_node(key)
+            if get_node == to_node or (get_node == next_node  or get_node == next_next_node):
+            # Logic to send this key-value to the target node
+                message = f"COMMAND CREATE {key} {value}"
+                self.Network.send_message_to_node(to_node, message)

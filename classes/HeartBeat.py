@@ -28,7 +28,6 @@ class Heartbeat:
                     # If the failing node is the coordinator, start an election
                     if node_id == self.Election.coordinator:
                         print(f"Node {self.Node.node_id} detected that the coordinator (Node {node_id}) has failed.")
-                        # self.nodes[f'node{node_id}']['isAlive'] = False
                         self.Election.start_election()
                     # If this node is the coordinator and detects another node's failure, update the list and broadcast
                     elif self.Node.node_id == self.Election.coordinator and self.Node.nodes[f'node{node_id}']['isAlive']:
