@@ -40,7 +40,8 @@ class Heartbeat:
 
                         # the coordinator will remove any node that failed
                         # including the prev. coordinator
-                        # hashRing.removeNode("node"+node_id)
+                        self.Node.hr.remove_node(f'node{node_id}')
+    
                         
             # If this node thinks there's no coordinator and an election is not in progress, start an election
             if self.Election.coordinator is None and not self.Election.election_in_progress:

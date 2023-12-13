@@ -10,21 +10,31 @@ def hashRing(nodes):
 import json
 
 
+# def get_next_node(nodes, current_node_name):
+#     # Assuming self.nodes is a dictionary where keys are node names
+#     nodenames = sorted(nodes)  # Get sorted list of node names
 
-def find_next_two_nodes(self, current_node_id):
-    # Assuming self.nodes is a dictionary of node information
-    # and they are ordered in some manner (e.g., by node ID)
-    sorted_node_ids = sorted(self.nodes.keys())
-    current_index = sorted_node_ids.index(current_node_id)
+#     # Find the index of the current node
+#     current_index = nodenames.index(current_node_name)
 
-    # Find the next two nodes in the ring
-    next_node_index = (current_index + 1) % len(sorted_node_ids)
-    second_next_node_index = (current_index + 2) % len(sorted_node_ids)
+#     # Calculate the index of the next node
+#     next_index = (current_index + 1) % len(nodenames)
 
-    next_node_id = sorted_node_ids[next_node_index]
-    second_next_node_id = sorted_node_ids[second_next_node_index]
+#     # Return the name of the next node
+#     return nodenames[next_index]
 
-    return next_node_id, second_next_node_id
+def get_previous_node(nodes, current_node_name):
+    nodenames = sorted(nodes)  # Get sorted list of node names
+
+    # Find the index of the current node
+    current_index = nodenames.index(current_node_name)
+
+    # Calculate the indices of the previous two nodes
+    # The '% len(nodenames)' ensures that the index wraps around the list
+    prev_index1 = (current_index - 1) % len(nodenames)
+
+    # Return the names of the previous two nodes
+    return nodenames[prev_index1]
 
 
 
@@ -40,25 +50,28 @@ def save_data(nodename, key, value):
 
     # Update the data with the new key-value pair
     if key in data:
-        print(key)
-        return "FAIL Duplicated Key"
+        return "FAILED-Duplicated-Key"
     data[key] = value
 
     # Write the updated data back to the file
     with open(filename, 'w') as file:
         json.dump(data, file, indent=4)
-    return f"SUCCESS Key-Value added"
+    return f"SUCCESS-({key}:{value})-added"
 
 
 
-def load_node_data(node_id):
-    filename = f'node_{node_id}.json'
+def load_node_data(nodename, key):
+    filename = f'{nodename}.json'
     try:
         with open(filename, 'r') as file:
-            return json.load(file)
+            data = json.load(file)
+            # Extract the value for the specific key
+            if key in data:
+                return data[key]
+            else:
+                return f"NOT-FOUND"
     except FileNotFoundError:
-        print(f"No data file found for node {node_id}.")
-        return None
+        return f"NOT-FOUND"
     
 
 def create(nodename, key, value):
@@ -67,7 +80,8 @@ def create(nodename, key, value):
 
 
 def read(nodename, key):
-    pass
+    response = load_node_data(nodename, key)
+    return response
 
 def delete(nodename, key):
     pass

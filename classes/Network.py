@@ -1,7 +1,7 @@
 import socket
 import threading
 
-from HashRing import hashRing, create, read, delete
+from hashRing import create, read, delete, get_previous_node
 
 class Network:
     def __init__(self, Node, hostname, port):
@@ -80,7 +80,7 @@ class Network:
                         self.request_from_client(parts, data, conn, client_id)
 
                     #if the request comes from other node in the system
-                    else: 
+                    else:
                         self.request_from_node(parts)
                 
         except Exception as e:
@@ -93,20 +93,19 @@ class Network:
 
 
     def request_from_node(self, parts):
-        if len(parts) <= 3 or parts[0] == "NODES-UPDATE":
+
+
+        if parts[0] == "NODE-CLIENT-RESPONSE":
+            self.handle_response(parts)
+
+        elif len(parts) <= 3 or parts[0] == "NODES-UPDATE":
             message = parts[0]
             node_id = int(parts[1])
             self.MessageHandler.handle_messages(message, node_id, parts)
 
-            # Don't print the heartbeat message, because it will do it forever
-            if message != "HEARTBEAT" and message != "NODES-UPDATE":
-                print(f"Received {message} from Node {node_id}")
-        
-        elif parts[0] == "NODE-CLIENT-RESPONSE":
-            self.handle_response(parts)
-
         #if the message is a COMMAND (CREATE KEY VALUE) 
-        elif len(parts) >= 5:
+        # or COMMAND READ 2
+        elif len(parts) >= 5 or parts[0] == "COMMAND":
             self.MessageHandler.handle_command(parts)
             return
         
@@ -128,7 +127,15 @@ class Network:
     def process_client_request(self, data, command, client_conn, client_id):
         parts = data.split()
         key = parts[1]
+
+        #find the next two nodes, to replicate the data
         target_node = self.Node.hr.get_node(key)
+        print(target_node)
+
+        #get the list of the alive nodes in the ring
+        hr_nodes = self.Node.hr.get_nodes()
+        next_node1 = get_previous_node(hr_nodes, target_node)
+        next_node2 = get_previous_node(hr_nodes, next_node1)
         
         #if the coordiantor does no have the key in his database
         #send a request to the target_node to get the value
@@ -136,8 +143,13 @@ class Network:
         if (self.Node.nodename != target_node):
             #Format:  COMMAND CREATE KEY VALUE
             message = f"COMMAND {data}"
+            replication_message = f"REPLICATION {data}"
+            
 
             self.send_message_to_node(target_node, message, client_id)
+            if parts[0] in ['CREATE', 'UPDATE', 'DELETE']:
+                self.send_message_to_node(next_node1, replication_message, client_id)
+                self.send_message_to_node(next_node2, replication_message, client_id)
             #send response to the client
 
         # If the target node is this node, process the request and respond to the client
@@ -145,10 +157,14 @@ class Network:
             if command == 'CREATE':
                 value = parts[2]
                 response = create(target_node, key, value)
+                create(next_node1, key, value)
+                create(next_node2, key, value)
                 client_conn.sendall(response.encode())
 
             elif command == 'READ':
-                read(target_node, key)
+                target_node = self.Node.hr.get_node(key)
+                response = read(target_node, key)
+                client_conn.sendall(response.encode())
 
             elif command == 'DELETE':
                 pass

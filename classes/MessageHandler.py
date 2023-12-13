@@ -1,7 +1,7 @@
 import time
 
 
-from HashRing import hashRing, create, read, delete
+from hashRing import hashRing, create, read, delete
 
 
 class MessageHandler:
@@ -93,11 +93,12 @@ class MessageHandler:
     #the command is sent only from the coordinator
     def handle_command(self, parts):
         "COMMAND CREATE KEY VALUE CLIENT_CONN"
- 
+        "REPLICATION CREATE KEY VALUE CLIENT_CONN"
+
+        command_or_replication = parts[0]
         command = parts[1]
         key = parts[2]
-        value = parts[3]
-        client_id = parts[5]
+        client_id = parts[-1]
 
         """
         if the the node successfully created the key, 
@@ -106,8 +107,19 @@ class MessageHandler:
    
         if command in ['CREATE', 'READ', 'UPDATE', 'DELETE']:
             if (command == 'CREATE'):
+                value = parts[3]
                 response = create(self.Node.nodename, key, value)
                 coordinator_name = 'node'+str(self.Election.coordinator)
                 #response is either:
                 # "FAIL Duplicated Key" or "SUCCESS"
+                if command_or_replication == "COMMAND":
+                    self.Network.send_response_to_coordinator(coordinator_name, response, client_id)
+                
+            elif (command == 'READ'):
+                response = read(self.Node.nodename, key)
+                coordinator_name = 'node'+str(self.Election.coordinator)
+                #response is either:
+                # "FAIL Duplicated Key" or "SUCCESS"
                 self.Network.send_response_to_coordinator(coordinator_name, response, client_id)
+
+

@@ -11,7 +11,7 @@ from classes.MessageHandler import MessageHandler
 
 
 
-from HashRing import hashRing, create, read, delete
+from hashRing import hashRing
 
 class Node(threading.Thread):
 
@@ -66,7 +66,7 @@ class Node(threading.Thread):
         # coordinator will start the hashring, with the updated list of nodes
         # filter the nodes dict to create hash a ring with alive nodes only
         alive_nodes = {node_id: node_info for node_id, node_info in self.nodes.items() if node_info['isAlive']}
-        self.hr = hashRing(alive_nodes)
+        self.hr = hashRing(sorted(alive_nodes))
 
     def redirect_to_coordinator():
         pass 
@@ -94,11 +94,18 @@ nodes = {
         'port': 5030,
         'isAlive': True,
     },
+    'node4': {
+        'id': 4,
+        'hostname': 'localhost',
+        'port': 5040,
+        'isAlive': True,
+    },
 }    
 
 node = Node(1, 'localhost', 5004, nodes)
-node = Node(2, 'localhost', 5020, nodes)
-node = Node(3, 'localhost', 5030, nodes)
+# node = Node(2, 'localhost', 5020, nodes)
+# node = Node(3, 'localhost', 5030, nodes)
+# node = Node(4, 'localhost', 5040, nodes)
 
 node.start()
 node.Network.run_server()
