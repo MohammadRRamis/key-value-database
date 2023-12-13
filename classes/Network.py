@@ -1,7 +1,7 @@
 import socket
 import threading
 
-from HashRing import create, read, delete, get_previous_node
+from hashRing import create, read, delete, get_previous_node
 
 class Network:
     def __init__(self, Node, hostname, port):

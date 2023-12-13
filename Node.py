@@ -11,7 +11,7 @@ from classes.MessageHandler import MessageHandler
 
 
 
-from HashRing import hashRing
+from hashRing import hashRing
 
 class Node(threading.Thread):
 
@@ -103,9 +103,9 @@ nodes = {
 }    
 
 node = Node(1, 'localhost', 5004, nodes)
-# node = Node(2, 'localhost', 5020, nodes)
+node = Node(2, 'localhost', 5020, nodes)
 node = Node(3, 'localhost', 5030, nodes)
-# node = Node(4, 'localhost', 5040, nodes)
+node = Node(4, 'localhost', 5040, nodes)
 
 node.start()
 node.Network.run_server()

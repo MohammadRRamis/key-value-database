@@ -1,7 +1,7 @@
 import time
 
 
-from HashRing import hashRing, create, read, delete, add_node, read_json_file, get_next_node
+from hashRing import hashRing, create, read, delete, add_node, read_json_file, get_next_node
 
 
 class MessageHandler:
