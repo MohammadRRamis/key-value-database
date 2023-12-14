@@ -43,7 +43,7 @@ def process_command(sock, command, args):
 
 def main():
     coordinator_host = 'localhost'  # Replace with actual host
-    coordinator_port = 5004        # Replace with actual port
+    coordinator_port = 5010        # Replace with actual port
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect((coordinator_host, coordinator_port))

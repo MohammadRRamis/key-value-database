@@ -1,7 +1,7 @@
 import time
 
 
-from hashRing import hashRing, create, read, delete, add_node, read_json_file, get_next_node
+from hashRing import hashRing, create, read, delete, update, add_node, read_json_file, get_next_node
 
 
 class MessageHandler:
@@ -114,20 +114,33 @@ class MessageHandler:
                 value = parts[3]
                 response = create(self.Node.nodename, key, value)
                 coordinator_name = 'node'+str(self.Election.coordinator)
-                #response is either:
-                # "FAIL Duplicated Key" or "SUCCESS"
+
                 if command_or_replication == "COMMAND":
                     self.Network.send_response_to_coordinator(coordinator_name, response, client_id)
                 
             elif (command == 'READ'):
                 response = read(self.Node.nodename, key)
                 coordinator_name = 'node'+str(self.Election.coordinator)
-                #response is either:
-                # "FAIL Duplicated Key" or "SUCCESS"
+
                 self.Network.send_response_to_coordinator(coordinator_name, response, client_id)
 
+            if (command == 'UPDATE'):
+                value = parts[3]
+                response = update(self.Node.nodename, key, value)
+                coordinator_name = 'node'+str(self.Election.coordinator)
 
-    def handle_replicated_data(self, from_node, to_node):
+                if command_or_replication == "COMMAND":
+                    self.Network.send_response_to_coordinator(coordinator_name, response, client_id)
+
+            if (command == 'DELETE'):
+                response = delete(self.Node.nodename, key)
+                coordinator_name = 'node'+str(self.Election.coordinator)
+
+                if command_or_replication == "COMMAND":
+                    self.Network.send_response_to_coordinator(coordinator_name, response, client_id)
+
+
+    def handle_replicated_data(self, from_node, to_node, from_node_data):
         """
         Handles the replicated data: reads from a source node's file,
         checks if each key belongs to the target node, and sends it if so.
@@ -144,8 +157,7 @@ class MessageHandler:
         next_node = get_next_node(nodes, to_node)
         next_next_node = get_next_node(nodes, next_node)
 
-        #send a request instead of reading a json file !!!!--------------------------------------------------
-        from_node_data = read_json_file(from_node)
+
         if from_node_data is None:
             print(f"Failed to read data from {from_node}")
             return
@@ -156,3 +168,43 @@ class MessageHandler:
             # Logic to send this key-value to the target node
                 message = f"COMMAND CREATE {key} {value}"
                 self.Network.send_message_to_node(to_node, message)
+
+    def handle_create(self, parts, target_node, previous_node1, previous_node2, replication_message, client_id):
+        key = parts[1]
+        value = parts[2]
+        response = create(target_node, key, value)
+        if response == "FAILED-DUPLICATED-KEY":
+            return response
+
+        #send replication messages to previous 2 nodes (EX: node3 will send to node2 and node1 in order to replicate its data)
+        self.Network.send_message_to_node(previous_node1, replication_message, client_id)
+        self.Network.send_message_to_node(previous_node2, replication_message, client_id)
+        return response
+    
+    def handle_update(self, parts, target_node, previous_node1, previous_node2, replication_message, client_id):
+        key = parts[1]
+        value = parts[2]
+        response = update(target_node, key, value)
+        if response == "ERROR-Key-Not-Found":
+            return response
+
+        #send replication messages to previous 2 nodes (EX: node3 will send to node2 and node1 in order to replicate its data)
+        self.Network.send_message_to_node(previous_node1, replication_message, client_id)
+        self.Network.send_message_to_node(previous_node2, replication_message, client_id)
+        return response
+    
+    def handle_delete(self, parts, target_node, previous_node1, previous_node2, replication_message, client_id):
+        key = parts[1]
+        response = delete(target_node, key)
+        if response == "NO-KEY-TO-UPDATE":
+            return response
+
+        #send replication messages to previous 2 nodes (EX: node3 will send to node2 and node1 in order to replicate its data)
+        self.Network.send_message_to_node(previous_node1, replication_message, client_id)
+        self.Network.send_message_to_node(previous_node2, replication_message, client_id)
+        return response
+    
+    def handle_read(self, key, target_node):
+        response = read(target_node, key)
+        return response
+

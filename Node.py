@@ -79,7 +79,7 @@ nodes = {
     'node1': {
         'id': 1,
         'hostname': 'localhost',
-        'port': 5004,
+        'port': 5010,
         'isAlive': True,
     },
     'node2': {
@@ -102,7 +102,7 @@ nodes = {
     },
 }    
 
-node = Node(1, 'localhost', 5004, nodes)
+node = Node(1, 'localhost', 5010, nodes)
 node = Node(2, 'localhost', 5020, nodes)
 node = Node(3, 'localhost', 5030, nodes)
 node = Node(4, 'localhost', 5040, nodes)

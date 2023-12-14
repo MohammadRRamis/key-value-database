@@ -1,7 +1,8 @@
 import socket
+import json
 import threading
 
-from hashRing import create, read, delete, get_previous_node
+from hashRing import create, read, delete, get_previous_node, read_json_file
 
 class Network:
     def __init__(self, Node, hostname, port):
@@ -26,6 +27,27 @@ class Network:
                 self.active_clients[client_id] = conn  # Store the client connection
                 threading.Thread(target=self.handle_client, args=(conn, client_id)).start()
 
+
+    def send_dictionary_to_node(self, node_name, data_dict):
+
+        # Serialize the dictionary into JSON
+        serialized_data = json.dumps(data_dict)
+
+        # Socket setup for the target node
+        node_info = self.Node.nodes[node_name]
+        from_node = self.Node.nodename
+        to_node = node_name
+
+        try:
+            # Establishing a connection to the target node
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.connect((node_info['hostname'], node_info['port']))
+                # Sending the serialized data
+                sock.sendall(f'DICTIONARY {from_node} {to_node} {serialized_data}'.encode())
+                print(f"Data sent to {node_name}")
+        except Exception as e:
+            print(f"Error sending data to {node_name}: {e}")
+
     # ------------------------------------------------------------
     def send_message(self, hostname, port, message):
         try:
@@ -38,7 +60,6 @@ class Network:
             pass
         except Exception as e:
             print(f"Error while sending message to {hostname}:{port}: {e}")
-
 
 
     """
@@ -91,7 +112,6 @@ class Network:
                 self.handle_client_disconnection(client_id)
 
 
-
     def request_from_node(self, parts):
 
 
@@ -103,13 +123,19 @@ class Network:
         #the replica node, must know send the keys to their correct hashed value (replica node -> node)
         elif parts[0] == "GET_REPLICATED_DATA":
             to_node = parts[1]
-            self.MessageHandler.handle_replicated_data(self.Node.nodename, to_node)
+            from_node_data = read_json_file(self.Node.nodename)  #read the all keys/values in this node
+            self.send_dictionary_to_node(to_node, from_node_data) #send the node
+           
 
+        #DICTIONARY from_node to_node dictonary
+        elif parts[0] == "DICTIONARY":
+            self.handle__dictonary_response(parts)
 
         elif len(parts) <= 3 or parts[0] == "NODES-UPDATE":
             message = parts[0]
             node_id = int(parts[1])
             self.MessageHandler.handle_messages(message, node_id, parts)
+
 
         #if the message is a COMMAND (CREATE KEY VALUE) 
         # or COMMAND READ 2
@@ -139,14 +165,14 @@ class Network:
 
             #find the next two nodes, to replicate the data
             target_node = self.Node.hr.get_node(key)
-            print(target_node)
 
             #get the list of the alive nodes in the ring
             # hr_nodes = self.Node.hr.get_nodes()
             hr_nodes = self.Node.nodes.keys()
-            next_node1 = get_previous_node(hr_nodes, target_node)
-            next_node2 = get_previous_node(hr_nodes, next_node1)
+            previous_node1 = get_previous_node(hr_nodes, target_node)
+            previous_node2 = get_previous_node(hr_nodes, previous_node1)
             
+
             #if the coordiantor does no have the key in his database
             #send a request to the target_node to get the value
             #then send the value to the client
@@ -159,31 +185,31 @@ class Network:
 
                 self.send_message_to_node(target_node, message, client_id)
                 if parts[0] in ['CREATE', 'UPDATE', 'DELETE']:
-                    self.send_message_to_node(next_node1, replication_message, client_id)
-                    self.send_message_to_node(next_node2, replication_message, client_id)
-                #send response to the client
+                    self.send_message_to_node(previous_node1, replication_message, client_id)
+                    self.send_message_to_node(previous_node2, replication_message, client_id)
+
 
             # If the target node is this node, process the request and respond to the client
             else:
+                #COMMAND CREATE KEY VALUE
                 if command == 'CREATE':
-                    value = parts[2]
-                    response = create(target_node, key, value)
-                    #check alive 
-
-                    self.send_message_to_node(next_node1, replication_message, client_id)
-                    self.send_message_to_node(next_node2, replication_message, client_id)
+                    response = self.MessageHandler.handle_create(parts, target_node, previous_node1, previous_node2, replication_message, client_id)
                     client_conn.sendall(response.encode())
 
+                #COMMAND READ KEY
                 elif command == 'READ':
-                    target_node = self.Node.hr.get_node(key)
-                    response = read(target_node, key)
+                    response = self.MessageHandler.handle_read(key, target_node)
                     client_conn.sendall(response.encode())
 
-                elif command == 'DELETE':
-                    pass
-
+                #COMMAND UPDATE KEY VALUE
                 elif command == 'UPDATE':
-                    pass
+                    response = self.MessageHandler.handle_update(parts, target_node, previous_node1, previous_node2, replication_message, client_id)
+                    client_conn.sendall(response.encode())
+                
+                #COMMAND DELETE KEY
+                elif command == 'DELETE':
+                    response = self.MessageHandler.handle_delete(parts, target_node, previous_node1, previous_node2, replication_message, client_id)
+                    client_conn.sendall(response.encode())
 
     def send_response_to_coordinator(self, coordinator_name, response, client_id):
         try:
@@ -230,5 +256,20 @@ class Network:
 
 
     def handle_client_disconnection(self, client_id):
-        if client_id in self.active_clients:
-            del self.active_clients[client_id]
+        with self.Node.mutex:
+            if client_id in self.active_clients:
+                del self.active_clients[client_id]
+
+
+    def handle__dictonary_response(self, parts):
+        from_node = parts[1]
+        to_node = parts[2]
+
+        #recv the dict 
+        data_dict = parts[3:]
+        data_dict = ''.join(data_dict)
+        data_dict = json.loads(data_dict)
+            
+        self.MessageHandler.handle_replicated_data(from_node, to_node, data_dict)
+
+

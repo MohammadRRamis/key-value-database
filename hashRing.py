@@ -80,6 +80,50 @@ def save_data(nodename, key, value):
             json.dump(data, file, indent=4)
             print(f"SUCCESS-({key}:{value})-added")
         return f"SUCCESS-({key}:{value})-added"
+    
+def delete_data(nodename, key):
+    with file_lock:
+        filename = f'{nodename}.json'
+
+        try:
+            with open(filename, 'r') as file:
+                data = json.load(file)
+
+            if key in data:
+                del data[key]
+
+                with open(filename, 'w') as file:
+                    json.dump(data, file, indent=4)
+                return f"SUCCESS-{key}-deleted"
+
+            else:
+                return f"NOT-FOUND"
+
+        except FileNotFoundError:
+            return f"NOT-FOUND"
+        except json.JSONDecodeError:
+            return f"ERROR-Invalid-Data"
+
+
+def update_data(nodename, key, new_value):
+    with file_lock:  # Assuming file_lock is a threading.Lock() instance
+        filename = f'{nodename}.json'
+
+        # Load existing data from the file, if it exists
+        try:
+            with open(filename, 'r') as file:
+                data = json.load(file)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return "ERROR-File-NotFound-or-Corrupt"
+
+        # Check if the key exists in the data, and update its value
+        if key in data:
+            data[key] = new_value
+            with open(filename, 'w') as file:
+                json.dump(data, file, indent=4)
+            return f"SUCCESS-{key}-updated"
+        else:
+            return "ERROR-Key-Not-Found"
 
 
 
@@ -107,10 +151,12 @@ def read(nodename, key):
     return response
 
 def delete(nodename, key):
-    pass
+    response = delete_data(nodename, key)
+    return response
 
 def update(nodename, key, value):
-    pass
+    response = update_data(nodename, key, value)
+    return response
     
 def get_target_node_id(key, hash_ring):
     return hash_ring.get_node(key)
@@ -160,38 +206,6 @@ def request_replicated_data(source_node_name, target_node_name, nodes):
 def is_node_alive(nodename, nodes):
     return nodes[nodename]['isAlive']
 
-
-# def addNode(nodename, nodes):
-#     if nodename in nodes and nodes[nodename]["isAlive"] == False:
-#         nodes[nodename]["isAlive"] = True
-#         hr.add_node(nodename)
-
-#     # Identify the node which might have keys to be redistributed to the new node
-#     # For simplicity, we're just checking the next node in the ring
-#     # In a more complex setup, you might need a more sophisticated method to identify this node
-#     # Determine the next node in the ring
-#     next_node = getNodeAfter(hr, nodename)
-#     if next_node:
-#         addNodeRedistributeData(next_node, nodename, hr)
-
-#     print(f"{nodename} added and data redistributed successfully.")
-
-
-# def addNodeRedistributeData(source_node, target_node, hr, nodes):
-#     """
-#     Move data from the source node to the target node based on the updated hash ring.
-#     """
-#     source_instance = nodes[source_node]['instance']
-#     keys = source_instance.keys()
-
-#     for key in keys:
-#         # Check if the key should be moved to the target node
-#         correct_node = hr.get_node(key)
-#         if correct_node == target_node:
-#             value = source_instance.get(key)
-#             nodes[target_node].get('instance').set(key,value)
-#             # nodes[target_node]['instance'].set(key, value)
-#             source_instance.delete(key)
 
 
 
