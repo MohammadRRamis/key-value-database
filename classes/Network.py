@@ -95,9 +95,13 @@ class Network:
                     if not data:
                         break
                     data = data.decode()
-                    parts = data.split()
+                    parts = data.split()                
 
-                    if parts[0] in ['CREATE', 'READ', 'UPDATE', 'DELETE'] and parts[0] != 'NODES-UPDATE':
+                    if parts[0] == "CLIENT_REQUEST_COORDINATOR_INFO":
+                        self.redirect_to_coordinator(conn)
+
+
+                    elif parts[0] in ['CREATE', 'READ', 'UPDATE', 'DELETE'] and parts[0] != 'NODES-UPDATE':
                         self.request_from_client(parts, data, conn, client_id)
 
                     #if the request comes from other node in the system
@@ -155,7 +159,8 @@ class Network:
             self.process_client_request(data, command, client_conn, client_id)
         else:
             # Redirect client to the coordinator
-            self.redirect_to_coordinator(data, client_conn)
+            self.redirect_to_coordinator(client_conn)
+
 
 
     def process_client_request(self, data, command, client_conn, client_id):
@@ -271,5 +276,15 @@ class Network:
         data_dict = json.loads(data_dict)
             
         self.MessageHandler.handle_replicated_data(from_node, to_node, data_dict)
+
+    def redirect_to_coordinator(self, client_conn):
+        try:
+            coordinator_id = self.Election.coordinator 
+            redirect_message = f"COORDINATOR node{coordinator_id}"
+            client_conn.sendall(redirect_message.encode())
+        except Exception as e:
+            pass
+
+
 
 

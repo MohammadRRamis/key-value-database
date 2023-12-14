@@ -12,3 +12,12 @@ This documentation provides guidelines on managing nodes within our distributed 
     1. Modify the "nodes" Dictionary in the Node Class
     2. Modify the "nodes" Array in MessageHandler
     3. Start nodes
+
+
+3. The way Client Connection Works
+    1. Connect to a node.
+    2.  Send the "CLIENT_REQUEST_COORDINATOR_INFO" message.
+        Wait for a response.
+    3. Interpret the response:
+        1. If the response indicates a different node as the coordinator, disconnect and connect to that node.
+        2. If the response indicates the current node is the coordinator, continue with the current connection.

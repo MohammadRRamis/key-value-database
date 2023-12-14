@@ -79,33 +79,35 @@ nodes = {
     'node1': {
         'id': 1,
         'hostname': 'localhost',
-        'port': 5010,
+        'port': 8000,
         'isAlive': True,
     },
     'node2': {
         'id': 2,
         'hostname': 'localhost',
-        'port': 5020,
+        'port': 8001,
         'isAlive': True,
     },
     'node3': {
         'id': 3,
         'hostname': 'localhost',
-        'port': 5030,
+        'port': 8002,
         'isAlive': True,
     },
     'node4': {
         'id': 4,
         'hostname': 'localhost',
-        'port': 5040,
+        'port': 8003,
         'isAlive': True,
     },
 }    
 
-node = Node(1, 'localhost', 5010, nodes)
-node = Node(2, 'localhost', 5020, nodes)
-node = Node(3, 'localhost', 5030, nodes)
-node = Node(4, 'localhost', 5040, nodes)
+node = Node(4, 'localhost', 8003, nodes)
+# node = Node(3, 'localhost', 8002, nodes)
+# node = Node(2, 'localhost', 8001, nodes)
+# node = Node(1, 'localhost', 8000, nodes)
+
+
 
 node.start()
 node.Network.run_server()
