@@ -44,7 +44,7 @@ class Network:
                 sock.connect((node_info['hostname'], node_info['port']))
                 # Sending the serialized data
                 sock.sendall(f'DICTIONARY {from_node} {to_node} {serialized_data}'.encode())
-                print(f"Data sent to {node_name}")
+                # print(f"Data sent to {node_name}")
         except Exception as e:
             print(f"Error sending data to {node_name}: {e}")
 

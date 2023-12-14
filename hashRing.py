@@ -78,7 +78,6 @@ def save_data(nodename, key, value):
         # Write the updated data back to the file
         with open(filename, 'w') as file:
             json.dump(data, file, indent=4)
-            print(f"SUCCESS-({key}:{value})-added")
         return f"SUCCESS-({key}:{value})-added"
     
 def delete_data(nodename, key):
